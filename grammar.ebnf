@@ -1,0 +1,58 @@
+TaskDefinition = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection;
+
+
+(* Parameter Section Definitions *)
+
+ParameterSection = "Parameter:", NEWLINE, ParameterBody;
+ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
+ParameterStatement = ParameterDefinition, [WHITESPACE ,"REQUIRES", WHITESPACE, ParameterDefinition];
+ParameterDefinition = Identifier, "(", ParameterInformation, ")";
+ParameterInformation = Enumeration | Generation | Blueprint | BlueprintUsage;
+
+Enumeration = Values | ValuesWithComma;
+Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
+ValuesWithComma = ValueWithComma, {";", ValueWithComma};
+ValueWithComma = OPT_WS, "{", ANY, "}", OPT_WS;
+
+Generation = Generator | ( "{", GeneratorWithComma, "}" );
+Generator = {ANY_WO_COMMA}, Identifier, {ANY_WO_COMMA}, {Identifier, {ANY_WO_COMMA}};
+GeneratorWithComma = {ANY}, Identifier, {ANY}, {Identifier, {ANY}};
+
+Blueprint = OPT_WS ,Property, OPT_WS, {",", OPT_WS, Property, OPT_WS}, {",", OPT_WS, Ellipse, OPT_WS};
+Property = "@", CAP_WORD;
+Ellipse = "...";
+
+BlueprintUsage = OPT_WS, Identifier, "(", Enumeration, ")", OPT_WS;
+
+
+(* Parameter Usage Definitions *)
+
+ParameterUsage = Identifier, {"->", CAP_WORD, {"(", {ANY}, ")"}}; (* doofer Name, was besseres überlegen *)
+Identifier = "$", CAP_WORD;
+
+
+(* Other Section Definitions *)
+
+TaskSection = "Aufgabenstellung:", NEWLINE, Body, NEWLINE;
+SolutionSection = "Lösung:", NEWLINE, Body, NEWLINE;
+PreAllocationSection = "Vorbelegung:", NEWLINE, Body, NEWLINE;
+TestSection = "Test:", NEWLINE, Body, NEWLINE;
+
+Body = {ANY}, ParameterUsage, {ANY}, {ParameterUsage, {ANY}};
+
+
+(* Character Definitions *)
+
+WHITESPACE = ? any white space character ?;
+NEWLINE = ? new line character ?;
+CHAR = ? lowercase or uppercase word character ?;
+DIGIT = ? any digit ?;
+SPECIAL = ? any special character without ${} ?;
+UPPERCHAR = ? uppercase word character ?;
+ANY = CHAR | DIGIT | SPECIAL | WHITESPACE;
+ANY_WO_COMMA = ? like ANY but without ,?;
+
+WORD = CHAR, {CHAR};
+OPT_WS = {WHITESPACE}; (* optional whitespace *)
+WS_WORD = OPT_WS, WORD, OPT_WS;
+CAP_WORD = UPPERCHAR, {UPPERCHAR};
