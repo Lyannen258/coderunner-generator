@@ -2,6 +2,7 @@ module Parser where
 
 import Text.Parsec
 import GHC.Show (Show)
+import Data.Tree (Tree(Node))
 
 data AST = AST {
     label    :: String,
@@ -9,6 +10,8 @@ data AST = AST {
     children :: [AST]
     } deriving (Show)
 
+toDataTree :: AST -> Tree String
+toDataTree (AST label value children) = Node (label ++ "(" ++ value ++ ")") (map toDataTree children)
 
 coderunnerParser :: Parsec String () AST
 coderunnerParser = do
