@@ -3,7 +3,8 @@ TaskDefinition = ParameterSection, TaskSection, SolutionSection, PreAllocationSe
 
 (* Parameter Section Definitions *)
 
-ParameterSection = "Parameter:", NEWLINE, ParameterBody;
+ParameterSection = ParameterHeadline, NEWLINE, ParameterBody;
+ParameterHeadline = "Parameter:";
 ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
 ParameterStatement = ParameterDefinition, [WHITESPACE ,"REQUIRES", WHITESPACE, ParameterDefinition];
 ParameterDefinition = Identifier, "(", ParameterInformation, ")";
