@@ -12,6 +12,18 @@ data AST = AST {
 
 coderunnerParser :: Parsec String () AST
 coderunnerParser = do
+    parameterSection <- parameterSectionParser
+    return (AST "CoderunnerFile" "" [
+            parameterSection
+        ])
+
+
+parameterSectionParser :: Parsec String () AST
+parameterSectionParser = do
     p <- string "Parameter:"
     newline
-    return (AST p [])
+    --statements <- many parameterStatementParser
+    return (AST "ParameterSection" "" 
+        [
+            AST "ParameterHeadline" "Parameter:" []
+        ])
