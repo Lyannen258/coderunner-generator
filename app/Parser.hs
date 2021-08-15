@@ -21,12 +21,66 @@ coderunnerParser = do
         ])
 
 
+-- Parameter Section Parsers
+
 parameterSectionParser :: Parsec String () AST
 parameterSectionParser = do
-    p <- string "Parameter:"
+    headline <- string "Parameter:"
     newline
-    --statements <- many parameterStatementParser
+    body <- parameterBodyParser
     return (AST "ParameterSection" "" 
         [
-            AST "ParameterHeadline" "Parameter:" []
+            AST "ParameterHeadline" headline [],
+            body
         ])
+
+
+parameterBodyParser :: Parsec String () AST
+parameterBodyParser = do
+    statements <- many parameterStatementParser
+    return (AST "ParameterBody" "" statements)
+    
+parameterStatementParser :: Parsec String () AST
+parameterStatementParser = do
+    definition <- parameterDefinitionParser
+    astNodes <- try parameterStatementRequiresParser
+    return (AST "ParameterStatement" "" (definition : astNodes))
+
+parameterStatementRequiresParser :: Parsec String () [AST]
+parameterStatementRequiresParser = do
+    many1 (oneOf " \t")
+    requires <- string "REQUIRES"
+    many1 (oneOf " \t")
+    definition <- parameterDefinitionParser
+    let requiresNode = AST "Requires" requires []
+    return 
+        [
+            AST "Requires" requires [],
+            definition
+        ]
+
+
+parameterDefinitionParser :: Parsec String () AST
+parameterDefinitionParser = do
+    identifier <- identifierParser
+    char '('
+    -- information <- parameterInformationParser
+    -- char ")"
+    return (AST "ParameterDefinition" "" 
+        [
+            identifier
+            -- ,information
+        ])
+
+
+{- parameterInformationParser :: Parsec String () AST
+parameterInformationParser = do -}
+
+
+-- Parameter Usage Parsers
+
+identifierParser :: Parsec String () AST
+identifierParser = do
+    dollar <- char '$'
+    identifier <- many1 upper
+    return (AST "Identifier" (dollar : identifier) [])
