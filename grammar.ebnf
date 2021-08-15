@@ -6,7 +6,8 @@ TaskDefinition = ParameterSection, TaskSection, SolutionSection, PreAllocationSe
 ParameterSection = ParameterHeadline, NEWLINE, ParameterBody;
 ParameterHeadline = "Parameter:";
 ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
-ParameterStatement = ParameterDefinition, [WHITESPACE ,"REQUIRES", WHITESPACE, ParameterDefinition];
+ParameterStatement = ParameterDefinition, [WHITESPACE ,Requires , WHITESPACE, ParameterDefinition];
+Requires = "REQUIRES";
 ParameterDefinition = Identifier, "(", ParameterInformation, ")";
 ParameterInformation = Enumeration | Generation | Blueprint | BlueprintUsage;
 
