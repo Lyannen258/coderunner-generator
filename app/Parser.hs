@@ -5,7 +5,7 @@ import GHC.Show (Show)
 
 data AST = AST {
     label    :: String,
-    value     :: String,
+    value    :: String,
     children :: [AST]
     } deriving (Show)
 
