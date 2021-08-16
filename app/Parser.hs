@@ -37,8 +37,9 @@ parameterSectionParser = do
 
 parameterBodyParser :: Parsec String () AST
 parameterBodyParser = do
-    statements <- sepBy1 parameterStatementParser linebreak
-    return (AST "ParameterBody" "" statements)
+    statement1 <- parameterStatementParser
+    statements <- many (try (do {linebreak; parameterStatementParser}))
+    return (AST "ParameterBody" "" $ statement1 : statements)
 
 parameterStatementParser :: Parsec String () AST
 parameterStatementParser = do
@@ -75,11 +76,12 @@ parameterDefinitionParser = do
 
 parameterInformationParser :: Parsec String () AST
 parameterInformationParser = do
-    information <- enumerationParser {- <|>
-                   generationParser <|>
+    information <- try enumerationParser <|>
+                   generationParser {- <|>
                    blueprintParser <|>
                    blueprintUsageParser -}
     return (AST "ParameterInformation" "" [information])
+
 
 enumerationParser :: Parsec String () AST
 enumerationParser = do
@@ -105,10 +107,47 @@ valueWithCommaParser :: Parsec String () AST
 valueWithCommaParser = do
     many $ oneOf " \t"
     char '{'
-    value <- many1 $ noneOf "${}"
+    value <- many1 anyParser
     char '}'
     many $ oneOf " \t"
     return (AST "Value" value [])
+
+
+generationParser :: Parsec String () AST
+generationParser = do
+    try $ generatorParser valueCharacterGenerationParser 
+        <|> generatorWithCommaParser
+
+generatorParser :: Parsec String () Char -> Parsec String () AST
+generatorParser characterParser = do
+    firstArbitraryPart <- many characterParser
+    firstIdentifier <- identifierParser
+    secondArbitraryPart <- many characterParser
+    parts <- many $ generatorPartParser characterParser
+    let list = [
+                AST "ArbitraryPart" firstArbitraryPart [],
+                firstIdentifier,
+                AST "ArbitraryPart" secondArbitraryPart []
+               ] ++ concat parts
+    return $ AST "Generator" "" list
+
+generatorPartParser :: Parsec String () Char -> Parsec String () [AST]
+generatorPartParser characterParser = do
+    identifier <- identifierParser
+    arbitraryPart <- many characterParser
+    return 
+        [
+            identifier,
+            AST "ArbitraryPart" arbitraryPart []
+        ]
+
+generatorWithCommaParser :: Parsec String () AST
+generatorWithCommaParser = do
+    char '{'
+    generator <- generatorParser anyParser
+    char '}'
+    return generator
+
 
 -- Parameter Usage Parsers
 
@@ -121,7 +160,13 @@ identifierParser = do
 
 -- Character Parsers
 valueCharacterParser :: Parsec String () Char
-valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter
+valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
+
+valueCharacterGenerationParser :: Parsec String () Char 
+valueCharacterGenerationParser = do char ' ' <|> valueCharacterParser
+
+anyParser :: Parsec String () Char 
+anyParser = do noneOf "${}"
 
 linebreak :: Parsec String () Char
 linebreak = do newline <|> crlf
