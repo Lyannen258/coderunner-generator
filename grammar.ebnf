@@ -13,7 +13,7 @@ ParameterInformation = Enumeration | Generation | Blueprint | BlueprintUsage;
 
 Enumeration = Values | ValuesWithComma;
 Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
-ValuesWithComma = ValueWithComma, {";", ValueWithComma};
+ValuesWithComma = ValueWithComma, {";", ValueWithComma}; (* and with spaces *)
 ValueWithComma = OPT_WS, "{", ANY, "}", OPT_WS;
 
 Generation = Generator | ( "{", GeneratorWithComma, "}" );

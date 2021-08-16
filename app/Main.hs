@@ -6,9 +6,9 @@ import Data.Tree(drawTree)
 
 main :: IO ()
 main = do
-    fileContent <- readFile "../Input/test.txt"
+    fileContent <- readFile "../Input/writing_a_statement.txt"
     let output = parseFile fileContent
-    print output
+    writeFile "../Input/ast.txt" output
 
 parseFile :: String -> String
 parseFile content = case parse coderunnerParser "" content of

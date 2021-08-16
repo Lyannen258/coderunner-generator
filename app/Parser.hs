@@ -11,7 +11,7 @@ data AST = AST {
     } deriving (Show)
 
 toDataTree :: AST -> Tree String
-toDataTree (AST label value children) = Node (label ++ "(" ++ value ++ ")") (map toDataTree children)
+toDataTree (AST label value children) = Node (label ++ " (\"" ++ value ++ "\")") (map toDataTree children)
 
 coderunnerParser :: Parsec String () AST
 coderunnerParser = do
@@ -26,9 +26,9 @@ coderunnerParser = do
 parameterSectionParser :: Parsec String () AST
 parameterSectionParser = do
     headline <- string "Parameter:"
-    newline
+    linebreak
     body <- parameterBodyParser
-    return (AST "ParameterSection" "" 
+    return (AST "ParameterSection" ""
         [
             AST "ParameterHeadline" headline [],
             body
@@ -37,13 +37,13 @@ parameterSectionParser = do
 
 parameterBodyParser :: Parsec String () AST
 parameterBodyParser = do
-    statements <- many parameterStatementParser
+    statements <- sepBy parameterStatementParser linebreak
     return (AST "ParameterBody" "" statements)
-    
+
 parameterStatementParser :: Parsec String () AST
 parameterStatementParser = do
     definition <- parameterDefinitionParser
-    astNodes <- try parameterStatementRequiresParser
+    astNodes <- option [] parameterStatementRequiresParser
     return (AST "ParameterStatement" "" (definition : astNodes))
 
 parameterStatementRequiresParser :: Parsec String () [AST]
@@ -53,7 +53,7 @@ parameterStatementRequiresParser = do
     many1 (oneOf " \t")
     definition <- parameterDefinitionParser
     let requiresNode = AST "Requires" requires []
-    return 
+    return
         [
             AST "Requires" requires [],
             definition
@@ -64,18 +64,51 @@ parameterDefinitionParser :: Parsec String () AST
 parameterDefinitionParser = do
     identifier <- identifierParser
     char '('
-    -- information <- parameterInformationParser
-    -- char ")"
-    return (AST "ParameterDefinition" "" 
+    information <- parameterInformationParser
+    char ')'
+    return (AST "ParameterDefinition" ""
         [
-            identifier
-            -- ,information
+            identifier,
+            information
         ])
 
 
-{- parameterInformationParser :: Parsec String () AST
-parameterInformationParser = do -}
+parameterInformationParser :: Parsec String () AST
+parameterInformationParser = do
+    information <- enumerationParser {- <|>
+                   generationParser <|>
+                   blueprintParser <|>
+                   blueprintUsageParser -}
+    return (AST "ParameterInformation" "" [information])
 
+enumerationParser :: Parsec String () AST
+enumerationParser = do
+    values <- try valuesWithCommaParser <|> valuesParser
+    return (AST "Enumeration" "" values)
+
+valuesParser :: Parsec String () [AST]
+valuesParser = do
+    sepBy valueParser (char ',')
+
+valueParser :: Parsec String () AST
+valueParser = do
+    many $ char ' '
+    value <- many1 valueCharacterParser
+    many $ char ' '
+    return $ AST "Value" value []
+
+valuesWithCommaParser :: Parsec String () [AST]
+valuesWithCommaParser = do
+    sepBy valueWithCommaParser (char ';')
+
+valueWithCommaParser :: Parsec String () AST
+valueWithCommaParser = do
+    many $ oneOf " \t"
+    char '{'
+    value <- many1 $ noneOf "${}"
+    char '}'
+    many $ oneOf " \t"
+    return (AST "Value" value [])
 
 -- Parameter Usage Parsers
 
@@ -84,3 +117,11 @@ identifierParser = do
     dollar <- char '$'
     identifier <- many1 upper
     return (AST "Identifier" (dollar : identifier) [])
+
+
+-- Character Parsers
+valueCharacterParser :: Parsec String () Char
+valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter
+
+linebreak :: Parsec String () Char
+linebreak = do newline <|> crlf
