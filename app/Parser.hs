@@ -37,7 +37,7 @@ parameterSectionParser = do
 
 parameterBodyParser :: Parsec String () AST
 parameterBodyParser = do
-    statements <- sepBy parameterStatementParser linebreak
+    statements <- sepBy1 parameterStatementParser linebreak
     return (AST "ParameterBody" "" statements)
 
 parameterStatementParser :: Parsec String () AST
@@ -83,12 +83,12 @@ parameterInformationParser = do
 
 enumerationParser :: Parsec String () AST
 enumerationParser = do
-    values <- try valuesWithCommaParser <|> valuesParser
+    values <- try valuesParser <|> valuesWithCommaParser
     return (AST "Enumeration" "" values)
 
 valuesParser :: Parsec String () [AST]
 valuesParser = do
-    sepBy valueParser (char ',')
+    sepBy1 valueParser (char ',')
 
 valueParser :: Parsec String () AST
 valueParser = do
@@ -99,7 +99,7 @@ valueParser = do
 
 valuesWithCommaParser :: Parsec String () [AST]
 valuesWithCommaParser = do
-    sepBy valueWithCommaParser (char ';')
+    sepBy1 valueWithCommaParser (char ';')
 
 valueWithCommaParser :: Parsec String () AST
 valueWithCommaParser = do

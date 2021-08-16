@@ -6,7 +6,7 @@ import Data.Tree(drawTree)
 
 main :: IO ()
 main = do
-    fileContent <- readFile "../Input/writing_a_statement.txt"
+    fileContent <- readFile "../Input/test.txt"
     let output = parseFile fileContent
     writeFile "../Input/ast.txt" output
 
