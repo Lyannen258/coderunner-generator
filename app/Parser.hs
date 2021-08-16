@@ -77,9 +77,9 @@ parameterDefinitionParser = do
 parameterInformationParser :: Parsec String () AST
 parameterInformationParser = do
     information <- try enumerationParser <|>
-                   generationParser {- <|>
-                   blueprintParser <|>
-                   blueprintUsageParser -}
+                   try blueprintUsageParser <|>
+                   try generationParser <|>
+                   blueprintParser -- Reihenfolge wichtig
     return (AST "ParameterInformation" "" [information])
 
 
@@ -105,11 +105,11 @@ valuesWithCommaParser = do
 
 valueWithCommaParser :: Parsec String () AST
 valueWithCommaParser = do
-    many $ oneOf " \t"
+    optionalWhitespace
     char '{'
     value <- many1 anyParser
     char '}'
-    many $ oneOf " \t"
+    optionalWhitespace
     return (AST "Value" value [])
 
 
@@ -149,6 +149,53 @@ generatorWithCommaParser = do
     return generator
 
 
+blueprintParser :: Parsec String () AST
+blueprintParser = do
+    optionalWhitespace
+    property <- firstPropertyParser
+    optionalWhitespace
+    properties <- many $ try furtherPropertyParser
+    ellipse <- option [] ellipseParser
+    return $ AST "Blueprint" "" ([property] ++ properties ++ ellipse)
+
+firstPropertyParser :: Parsec String () AST
+firstPropertyParser = do
+    char '@'
+    propertyName <- many1 upper
+    return $ AST "Property" propertyName []
+
+furtherPropertyParser :: Parsec String () AST
+furtherPropertyParser = do
+    char ','
+    optionalWhitespace
+    property <- firstPropertyParser
+    optionalWhitespace
+    return property
+
+ellipseParser :: Parsec String () [AST]
+ellipseParser = do
+    char ','
+    optionalWhitespace
+    string "..."
+    optionalWhitespace
+    return [AST "Ellipse" "..." []]
+
+
+blueprintUsageParser :: Parsec String () AST
+blueprintUsageParser = do
+    optionalWhitespace
+    identifier <- identifierParser
+    char '('
+    enumeration <- enumerationParser
+    char ')'
+    optionalWhitespace
+    return $ AST "BlueprintUsage" ""
+        [
+            identifier,
+            enumeration
+        ]
+
+
 -- Parameter Usage Parsers
 
 identifierParser :: Parsec String () AST
@@ -170,3 +217,6 @@ anyParser = do noneOf "${}"
 
 linebreak :: Parsec String () Char
 linebreak = do newline <|> crlf
+
+optionalWhitespace :: Parsec String () String
+optionalWhitespace = do many (oneOf " \t")
