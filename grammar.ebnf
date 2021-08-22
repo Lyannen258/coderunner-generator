@@ -29,8 +29,11 @@ BlueprintUsage = OPT_WS, Identifier, "(", Enumeration, ")", OPT_WS;
 
 (* Parameter Usage Definitions *)
 
-ParameterUsage = Identifier, {"->", CAP_WORD, {"(", {ANY}, ")"}}; (* doofer Name, was besseres überlegen *)
+ParameterUsage = Identifier, {PropertyPart};
 Identifier = "$", CAP_WORD;
+PropertyPart = "->", CAP_WORD, {FunctionCallPart};
+FunctionCallPart = "(", {Argument}, ")";
+Argument = ANY_WO_COMMA;
 
 
 (* Other Section Definitions *)

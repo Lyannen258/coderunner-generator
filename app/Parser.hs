@@ -115,7 +115,7 @@ valueWithCommaParser = do
 
 generationParser :: Parsec String () AST
 generationParser = do
-    try $ generatorParser valueCharacterGenerationParser 
+    try $ generatorParser valueCharacterGenerationParser
         <|> generatorWithCommaParser
 
 generatorParser :: Parsec String () Char -> Parsec String () AST
@@ -135,7 +135,7 @@ generatorPartParser :: Parsec String () Char -> Parsec String () [AST]
 generatorPartParser characterParser = do
     identifier <- identifierParser
     arbitraryPart <- many characterParser
-    return 
+    return
         [
             identifier,
             AST "ArbitraryPart" arbitraryPart []
@@ -198,21 +198,47 @@ blueprintUsageParser = do
 
 -- Parameter Usage Parsers
 
+parameterUsageParser :: Parsec String () AST
+parameterUsageParser = do
+    identifier <- identifierParser
+    propertyPart <- optionMaybe propertyPartParser
+    return $ AST "ParameterUsage" ""
+        (case propertyPart of
+            Nothing -> []
+            Just x -> [x])
+
 identifierParser :: Parsec String () AST
 identifierParser = do
     dollar <- char '$'
     identifier <- many1 upper
     return (AST "Identifier" (dollar : identifier) [])
 
+propertyPartParser :: Parsec String () AST
+propertyPartParser = do
+    string "->"
+    propertyName <- many1 upper
+    functionCallPart <- optionMaybe functionCallPartParser
+    return $ AST "PropertyPart" propertyName
+        (case functionCallPart of
+            Nothing -> []
+            Just x -> [x])
+
+functionCallPartParser :: Parsec String () AST
+functionCallPartParser = do
+    string "("
+    argument <- many valueCharacterParser
+    string ")"
+    return $ AST "FunctionCallPart" "" ([AST "Argument" argument [] | not (null argument)])
+
 
 -- Character Parsers
 valueCharacterParser :: Parsec String () Char
 valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
 
-valueCharacterGenerationParser :: Parsec String () Char 
+valueCharacterGenerationParser :: Parsec String () Char
 valueCharacterGenerationParser = do char ' ' <|> valueCharacterParser
 
-anyParser :: Parsec String () Char 
+anyParser :: Parsec String () Char
 anyParser = do noneOf "${}"
 
 linebreak :: Parsec String () Char
