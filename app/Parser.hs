@@ -16,8 +16,16 @@ toDataTree (AST label value children) = Node (label ++ " (\"" ++ value ++ "\")")
 coderunnerParser :: Parsec String () AST
 coderunnerParser = do
     parameterSection <- parameterSectionParser
+    taskSection <- taskSectionParser
+    --solutionSection <- solutionSectionParser
+    --preAllocationSection <- preAllocationSectionParser
+    --testSection <- testSectionParser
     return (AST "CoderunnerFile" "" [
-            parameterSection
+            parameterSection,
+            taskSection
+            --solutionSection,
+            --preAllocationSection,
+            --testSection
         ])
 
 
@@ -204,8 +212,8 @@ parameterUsageParser = do
     propertyPart <- optionMaybe propertyPartParser
     return $ AST "ParameterUsage" ""
         (case propertyPart of
-            Nothing -> []
-            Just x -> [x])
+            Nothing -> [identifier]
+            Just x -> [identifier, x])
 
 identifierParser :: Parsec String () AST
 identifierParser = do
@@ -231,7 +239,72 @@ functionCallPartParser = do
     return $ AST "FunctionCallPart" "" ([AST "Argument" argument [] | not (null argument)])
 
 
+-- Other Section Parsers
+
+taskSectionParser :: Parsec String () AST
+taskSectionParser = do
+    many linebreak
+    string "Aufgabenstellung:"
+    optionalWhitespace
+    linebreak
+    body <- bodyParser
+    linebreak
+    return $ AST "TaskSection" "" [body]
+
+bodyParser :: Parsec String () AST
+bodyParser = do
+    elements <- choice
+        [
+            bodyConstantFirstElements,
+            bodyParameterFirstElements
+        ]
+    return $ AST "Body" "" elements
+
+bodyConstantFirstElements :: Parsec String () [AST]
+bodyConstantFirstElements = do
+    c1 <- constantParser
+    elements <- many (do
+        parameterUsage <- parameterUsageParser
+        constant <- optionMaybe constantParser
+        case constant of
+            Nothing -> return [parameterUsage]
+            Just a -> return [parameterUsage, a]
+        )
+    return (c1 : concat elements)
+
+bodyParameterFirstElements :: Parsec String () [AST]
+bodyParameterFirstElements = do
+    p1 <- parameterUsageParser
+    elements <- many (do
+        constant <- constantParser
+        parameterUsage <- optionMaybe parameterUsageParser
+        case parameterUsage of
+            Nothing -> return [constant]
+            Just a -> return [constant, a]
+        )
+    return (p1 : concat elements)
+
+constantParser :: Parsec String () AST
+constantParser = do
+    c <- manyTill anyChar $ lookAhead dollarOrHeadline
+    return $ AST "Constant" c []
+
+dollarOrHeadline :: Parsec String () [Char]
+dollarOrHeadline = do
+    try (string "$")
+        <|> try (do {linebreak; anyHeadline})
+
+anyHeadline :: Parsec String () [Char]
+anyHeadline = do
+    try (string "Aufgabenstellung:")
+        <|> try (string "L\246sung:")
+        <|> try (string "Vorbelegung:")
+        <|> try (string "Test:")
+        <|> string "Parameter:"
+
+
 -- Character Parsers
+
 valueCharacterParser :: Parsec String () Char
 valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
 
@@ -242,7 +315,7 @@ anyParser :: Parsec String () Char
 anyParser = do noneOf "${}"
 
 linebreak :: Parsec String () Char
-linebreak = do newline <|> crlf
+linebreak = do try newline <|> crlf
 
 optionalWhitespace :: Parsec String () String
 optionalWhitespace = do many (oneOf " \t")
