@@ -15,21 +15,30 @@ main = do
             ]
     mapM_ parseFile listOfPath
 
+
 parseFile :: String -> IO ()
 parseFile filePath = do
     inputHandle <- openFile filePath ReadMode
     hSetEncoding inputHandle utf8
     fileContent <- hGetContents inputHandle
 
-    let output = parseString fileContent
+    let parseResult = parseString fileContent
+    let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath
+    writeParseResult astPath parseResult
 
-    let outputPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath
-    outputHandle <- openFile outputPath WriteMode
+
+writeParseResult :: String -> Either ParseError AST -> IO ()
+writeParseResult filePath parseResult = do
+    let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath
+    outputHandle <- openFile astPath WriteMode
     hSetEncoding outputHandle utf8
-    hPutStr outputHandle output
+    hPutStr outputHandle $ parseResultToString parseResult
     hClose outputHandle
 
-parseString :: String -> String
-parseString content = case parse coderunnerParser "" content of
-                Left a -> show a
-                Right b -> drawTree $ toDataTree b
+parseString :: String -> Either ParseError AST
+parseString = parse coderunnerParser ""
+
+parseResultToString :: Either ParseError AST -> String
+parseResultToString parseResult = case parseResult of
+                            Left a -> show a
+                            Right b -> drawTree $ toDataTree b
