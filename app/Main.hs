@@ -13,11 +13,11 @@ main = do
             "02_missing_parts_of_code.txt",
             "03_errors_in_the_code.txt"
             ]
-    mapM_ parseFile listOfPath
+    mapM_ analyzeFile listOfPath
 
 
-parseFile :: String -> IO ()
-parseFile filePath = do
+analyzeFile :: String -> IO ()
+analyzeFile filePath = do
     inputHandle <- openFile filePath ReadMode
     hSetEncoding inputHandle utf8
     fileContent <- hGetContents inputHandle
