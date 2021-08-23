@@ -297,7 +297,7 @@ dollarOrHeadline = do
 anyHeadline :: Parsec String () [Char]
 anyHeadline = do
     try (string "Aufgabenstellung:")
-        <|> try (string "L\246sung:")
+        <|> try (string "Lösung:")
         <|> try (string "Vorbelegung:")
         <|> try (string "Test:")
         <|> string "Parameter:"
