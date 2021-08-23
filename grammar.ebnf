@@ -41,11 +41,16 @@ Argument = ANY_WO_COMMA;
 TaskSection = "Aufgabenstellung:", NEWLINE, Body, NEWLINE;
 SolutionSection = "Lösung:", NEWLINE, Body, NEWLINE;
 PreAllocationSection = "Vorbelegung:", NEWLINE, Body, NEWLINE;
-TestSection = "Test:", NEWLINE, TestBody, NEWLINE;
 
 Body = (Constant, {ParameterUsage, [Constant]})
     | (ParameterUsage, {Constant [ParameterUsage]});
 Constant = ANY; (* nicht ganz korrekt, geschweifte Klammern möglich *)
+
+TestSection = "Test:", NEWLINE, TestBody, NEWLINE;
+TestBody = {TestCase};
+TestCase = TestCode, TestOutcome;
+TestCode = Body;
+TestOutcome = NEWLINE, "Expected Outcome:", OPT_WS, ({CHAR | DIGIT | SPECIAL} | ParameterUsage), OPT_WS;
 
 
 (* Character Definitions *)

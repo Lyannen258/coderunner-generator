@@ -3,6 +3,7 @@ module Parser where
 import Text.Parsec
 import GHC.Show (Show)
 import Data.Tree (Tree(Node))
+import Text.Parsec.Token (GenLanguageDef(caseSensitive))
 
 data AST = AST {
     label    :: String,
@@ -17,15 +18,15 @@ coderunnerParser :: Parsec String () AST
 coderunnerParser = do
     parameterSection <- parameterSectionParser
     taskSection <- taskSectionParser
-    --solutionSection <- solutionSectionParser
-    --preAllocationSection <- preAllocationSectionParser
-    --testSection <- testSectionParser
+    solutionSection <- solutionSectionParser
+    preAllocationSection <- preAllocationSectionParser
+    testSection <- testSectionParser
     return (AST "CoderunnerFile" "" [
             parameterSection,
-            taskSection
-            --solutionSection,
-            --preAllocationSection,
-            --testSection
+            taskSection,
+            solutionSection,
+            preAllocationSection,
+            testSection
         ])
 
 
@@ -247,36 +248,56 @@ taskSectionParser = do
     string "Aufgabenstellung:"
     optionalWhitespace
     linebreak
-    body <- bodyParser
+    body <- bodyParser anyHeadline
     linebreak
     return $ AST "TaskSection" "" [body]
 
-bodyParser :: Parsec String () AST
-bodyParser = do
+solutionSectionParser :: Parsec String () AST
+solutionSectionParser = do
+    many linebreak
+    string "Lösung:"
+    optionalWhitespace
+    linebreak
+    body <- bodyParser anyHeadline
+    linebreak
+    return $ AST "SolutionSection" "" [body]
+
+preAllocationSectionParser :: Parsec String () AST
+preAllocationSectionParser = do
+    many linebreak
+    string "Vorbelegung:"
+    optionalWhitespace
+    linebreak
+    body <- bodyParser anyHeadline
+    linebreak
+    return $ AST "PreAllocationSection" "" [body]
+
+bodyParser :: Parsec String () a -> Parsec String () AST
+bodyParser bodyEndParser = do
     elements <- choice
         [
-            bodyConstantFirstElements,
-            bodyParameterFirstElements
+            bodyConstantFirstElements bodyEndParser,
+            bodyParameterFirstElements bodyEndParser
         ]
     return $ AST "Body" "" elements
 
-bodyConstantFirstElements :: Parsec String () [AST]
-bodyConstantFirstElements = do
-    c1 <- constantParser
+bodyConstantFirstElements :: Parsec String () a -> Parsec String () [AST]
+bodyConstantFirstElements bodyEndParser= do
+    c1 <- constantParser bodyEndParser
     elements <- many (do
         parameterUsage <- parameterUsageParser
-        constant <- optionMaybe constantParser
+        constant <- optionMaybe $ constantParser bodyEndParser
         case constant of
             Nothing -> return [parameterUsage]
             Just a -> return [parameterUsage, a]
         )
     return (c1 : concat elements)
 
-bodyParameterFirstElements :: Parsec String () [AST]
-bodyParameterFirstElements = do
+bodyParameterFirstElements :: Parsec String () a -> Parsec String () [AST]
+bodyParameterFirstElements bodyEndParser = do
     p1 <- parameterUsageParser
     elements <- many (do
-        constant <- constantParser
+        constant <- constantParser bodyEndParser
         parameterUsage <- optionMaybe parameterUsageParser
         case parameterUsage of
             Nothing -> return [constant]
@@ -284,23 +305,62 @@ bodyParameterFirstElements = do
         )
     return (p1 : concat elements)
 
-constantParser :: Parsec String () AST
-constantParser = do
-    c <- manyTill anyChar $ lookAhead dollarOrHeadline
+constantParser :: Parsec String () a -> Parsec String () AST
+constantParser endParser = do
+    c <- manyTill anyChar $ lookAhead $ dollarOr endParser
     return $ AST "Constant" c []
 
-dollarOrHeadline :: Parsec String () [Char]
-dollarOrHeadline = do
+dollarOr :: Parsec String () a -> Parsec String () [Char]
+dollarOr end = do
     try (string "$")
-        <|> try (do {linebreak; anyHeadline})
+        <|> try (do {end; return ""})
 
 anyHeadline :: Parsec String () [Char]
 anyHeadline = do
+    linebreak
     try (string "Aufgabenstellung:")
         <|> try (string "Lösung:")
         <|> try (string "Vorbelegung:")
-        <|> try (string "Test:")
+        <|> try (string "Tests:")
         <|> string "Parameter:"
+
+
+-- Test Section Parsers
+
+testSectionParser :: Parsec String () AST
+testSectionParser = do
+    many linebreak
+    string "Tests:"
+    optionalWhitespace
+    linebreak
+    testBody <- testBodyParser
+    eof
+    return $ AST "TestSection" "" [testBody]
+
+testBodyParser :: Parsec String () AST
+testBodyParser = do
+    cases <- many testCaseParser
+    return $ AST "TestBody" "" cases
+
+testCaseParser :: Parsec String () AST
+testCaseParser = do
+    caseBody <- bodyParser testOutcomeParser
+    outcome <- testOutcomeParser
+    return $ AST "TestCase" "" 
+        [
+            AST "TestCode" (value caseBody) (children caseBody), -- Body zu TestCode umbenennen
+            outcome
+        ]
+
+testOutcomeParser :: Parsec String () AST
+testOutcomeParser = do
+    linebreak
+    string "Expected Outcome:"
+    optionalWhitespace
+    outcome <- many1 valueCharacterParser -- hier fehlt noch ParameterUsage (siehe EBNF)
+    optionalWhitespace
+    optional $ many linebreak
+    return $ AST "TestOutcome" outcome []
 
 
 -- Character Parsers
