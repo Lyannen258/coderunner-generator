@@ -5,6 +5,7 @@ import Parser
 import Data.Tree(drawTree)
 import System.IO
 import System.FilePath (takeDirectory, takeBaseName)
+import SemanticAnalyzer
 
 main :: IO ()
 main = do
@@ -23,9 +24,13 @@ analyzeFile filePath = do
     fileContent <- hGetContents inputHandle
 
     let parseResult = parseString fileContent
-    let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath
-    writeParseResult astPath parseResult
+    writeParseResult filePath parseResult
 
+    let semanticResult = parseToSemantic parseResult >>= semanticAnalysis
+    writeSemanticResult filePath semanticResult
+
+
+-- Parse Functions
 
 writeParseResult :: String -> Either ParseError AST -> IO ()
 writeParseResult filePath parseResult = do
@@ -42,3 +47,25 @@ parseResultToString :: Either ParseError AST -> String
 parseResultToString parseResult = case parseResult of
                             Left a -> show a
                             Right b -> drawTree $ toDataTree b
+
+
+-- Semantic Analysis Functions
+
+writeSemanticResult :: String -> Either String SymbolTable -> IO ()
+writeSemanticResult filePath result = do
+    let stPath = takeDirectory filePath ++ "/ST_" ++ takeBaseName filePath
+    outputHandle <- openFile stPath WriteMode
+    hSetEncoding outputHandle utf8
+    hPutStr outputHandle $ semanticResultToString result
+    hClose outputHandle
+
+semanticResultToString :: Either String SymbolTable -> String 
+semanticResultToString (Left a) = show a
+semanticResultToString (Right b) = show b
+
+
+-- Helper
+
+parseToSemantic :: Either ParseError a -> Either String a
+parseToSemantic (Left error) = Left "Error while Parsing"
+parseToSemantic (Right a) = Right a
