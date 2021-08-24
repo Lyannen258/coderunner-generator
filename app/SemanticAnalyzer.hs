@@ -2,19 +2,42 @@ module SemanticAnalyzer where
 
 import qualified Data.Map as Map
 import Parser
-import GHC.Types (Symbol)
+import Data.List (intercalate)
+
 
 
 newtype SemanticResult = SemanticResult SymbolTable
 
 type SymbolTable = Map.Map String SymbolInformation
 
+showSymbolTable :: SymbolTable -> String 
+showSymbolTable symbolTable = 
+    let tableBody = intercalate "\n" (map tupleToString (Map.toList symbolTable))
+    in "Identifier          Type\n\n" ++ tableBody
+
+
+tupleToString :: (String, SymbolInformation) -> String
+tupleToString (a, b) = fillToTwenty a ++ show b
+
+fillToTwenty :: String -> String 
+fillToTwenty s = if length s < 20
+    then fillToTwenty (s ++ " ")
+    else s
+
+
 data SymbolInformation = Enumeration {possibleValues :: [String]}
     | Generation
     | Blueprint {properties :: [String]}
     | BlueprintUsage {blueprint :: String, propertyValues :: Map.Map String String}
-    deriving (Show)
 
+instance Show SymbolInformation where
+    show (Enumeration a)      = "Enumeration (" ++ intercalate "," a ++ ")"
+    show Generation           = "Generation"
+    show (Blueprint a)        = "Blueprint (" ++ intercalate "," a ++ ")"
+    show (BlueprintUsage a b) = "BlueprintUsage BP="
+        ++ a
+        ++ ", PropertyValues: "
+        ++ intercalate ", " (map (\(a,b) -> a ++ b) $ Map.toList b)
 
 
 

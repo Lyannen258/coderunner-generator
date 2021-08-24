@@ -61,7 +61,7 @@ writeSemanticResult filePath result = do
 
 semanticResultToString :: Either String SymbolTable -> String 
 semanticResultToString (Left a) = show a
-semanticResultToString (Right b) = show b
+semanticResultToString (Right b) = showSymbolTable b
 
 
 -- Helper
