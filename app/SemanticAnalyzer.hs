@@ -3,6 +3,7 @@ module SemanticAnalyzer where
 import qualified Data.Map as Map
 import Parser
 import Data.List (intercalate)
+import Data.ByteString.Builder.Prim (emptyB)
 
 
 
@@ -63,7 +64,7 @@ semanticAnalysis (AST ParameterDefinition _ children) = do
 semanticAnalysis ast@(AST ParameterStatement _ children) =
     case statementType ast of
         Right Enumeration    -> analyzeEnumerationStatement ast
-        --Right Generation     -> analyzeGenerationStatement ast
+        Right Generation     -> analyzeGenerationStatement ast
         --Right Blueprint      -> analyzeBlueprintStatement ast
         --Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
         Left x               -> Left x
@@ -208,3 +209,11 @@ getSymbolInformation (ast:asts) =
             x                -> Left $ "Label '" ++ show x ++ "' invalid"
         else getSymbolInformation asts
 getSymbolInformation [] = Left "No ParameterInformation found"
+
+
+-- Analyze Generation Symbol
+
+analyzeGenerationStatement :: AST -> Either String SymbolTable
+analyzeGenerationStatement ast = do
+    id <- getIdentifier $ children ast
+    return $ Map.singleton id GenerationSymbol
