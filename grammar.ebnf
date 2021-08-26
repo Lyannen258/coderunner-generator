@@ -1,4 +1,4 @@
-TaskDefinition = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection;
+CoderunnerFile = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection;
 
 
 (* Parameter Section Definitions *)
