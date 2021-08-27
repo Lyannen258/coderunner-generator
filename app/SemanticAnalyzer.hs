@@ -2,8 +2,9 @@ module SemanticAnalyzer where
 
 import qualified Data.Map as Map
 import Parser
-import Data.List (intercalate)
 import Control.Monad (join)
+import Data.List
+import Debug.Trace
 
 
 
@@ -56,8 +57,6 @@ data Property = Property String
     deriving (Show)
 
 
-
-
 semanticAnalysis :: AST -> Either String SymbolTable
 semanticAnalysis ast@(AST ParameterStatement _ children) =
     case statementType ast of
@@ -66,12 +65,20 @@ semanticAnalysis ast@(AST ParameterStatement _ children) =
         Right Blueprint      -> analyzeBlueprintStatement ast
         --Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
         Left x               -> Left x
-semanticAnalysis (AST _ _ children)  = do
+semanticAnalysis (AST _ _ children) = do
     list <- mapM semanticAnalysis children
-    return $ foldl Map.union Map.empty list
+    return $ foldl mergeTableParts Map.empty list
 
-
-
+mergeTableParts :: SymbolTable -> SymbolTable -> SymbolTable
+mergeTableParts t1 t2 =
+    let keys1 = Map.keys t1
+        keys2 = Map.keys t2
+        overlappingKeys = intersect keys1 keys2
+        allKeys = union keys1 keys2
+        uniqueKeys = allKeys \\ overlappingKeys
+    in Map.fromList $
+        map (\k -> (k, mergeSymbolInfos (t1 Map.! k) (t2 Map.! k)))overlappingKeys
+        ++ map (\k -> (k, Map.union t1 t2 Map.! k)) uniqueKeys
 
 
 
@@ -103,6 +110,7 @@ analyzeEnumerationStatement (AST ParameterStatement _
     id2 <- getIdentifier def2
     enumInfo2 <- getEnumerationInfo def2
     enumInfo1WRules <- enrichWithRules enumInfo1 id2 enumInfo2
+
     return $ Map.fromList
         [
             (id1, enumInfo1WRules),
@@ -138,6 +146,54 @@ getEnumerationValues (AST ParameterInformation _ children) =
 getEnumerationValues (AST Enumeration _ children) =
     mapM getEnumerationValue children
 getEnumerationValues ast = Left $ "Unexpected Node in Enumeration ParameterDefinition: " ++ show (label ast)
+
+
+
+mergeSymbolInfos :: SymbolInformation -> SymbolInformation -> SymbolInformation
+mergeSymbolInfos (EnumerationSymbol vs1) (EnumerationSymbol vs2) =
+    EnumerationSymbol $ mergeEnumerationValues vs1 vs2
+
+mergeSymbolInfos' a b = trace
+    ("\nmergeSymbolInfos:\na: " ++ show a ++ "\nb: " ++ show b ++ "\nresult: " ++ show (mergeSymbolInfos a b))
+    (mergeSymbolInfos a b)
+
+mergeEnumerationValues :: [EnumerationValue] -> [EnumerationValue] -> [EnumerationValue]
+mergeEnumerationValues vs1 vs2 =
+    let mergedValues = concatMap mergeEnumerationValue [(a, b) | a <- vs1, b <- vs2]
+        singleValues = filter filterPredicate (vs1 ++ vs2)
+        filterPredicate x = enumValue x `elem` getDuplicateKeys (vs1 ++ vs2)
+    in mergedValues ++ singleValues
+
+getDuplicateKeys :: [EnumerationValue] -> [String]
+getDuplicateKeys vs = Map.keys multiOccurences
+    where occurences = countOccurences (map enumValue vs) Map.empty
+          multiOccurences = Map.filter (<= 1) occurences
+
+countOccurences :: Ord a => [a] -> Map.Map a Int -> Map.Map a Int
+countOccurences (v:vs) counted =
+    if Map.member v counted
+    then countOccurences vs $ Map.insert v ((counted Map.! v) + 1) counted
+    else countOccurences vs $ Map.insert v 1 counted
+countOccurences [] counted = counted
+
+
+mergeEnumerationValue :: (EnumerationValue, EnumerationValue) -> [EnumerationValue]
+mergeEnumerationValue (v1,v2)
+    | enumValue v1 == enumValue v2 = [EnumerationValue
+        (enumValue v1)
+        (rules v1 ++ rules v2)]
+    | otherwise = []
+
+mergeEnumerationValue' (a, b) = trace
+    ("\nmergeEnumerationValue:\na: "
+    ++ show a
+    ++ "\nb: "
+    ++ show b
+    ++ "\nresult: "
+    ++ show (mergeEnumerationValue (a, b))
+    ++ "\n")
+    (mergeEnumerationValue (a, b))
+
 
 
 -- Requires Rule Functions
@@ -190,13 +246,13 @@ getRequiresValueAreaRule reqId requires =
 
 
 getIdentifier :: AST -> Either String String
-getIdentifier ast = 
+getIdentifier ast =
     let identifiers = getIdentifierList ast
     in case length identifiers of
         0 -> Left $ "No identifier found in following AST: \n" ++ show ast
         1 -> Right $ head identifiers
-        x -> Left $ 
-            "Ambiguous Result: Found more than one identifier in AST: \n" 
+        x -> Left $
+            "Ambiguous Result: Found more than one identifier in AST: \n"
             ++ show ast
 
 getIdentifierList :: AST -> [String]
