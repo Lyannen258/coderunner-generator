@@ -3,7 +3,7 @@ module SemanticAnalyzer where
 import qualified Data.Map as Map
 import Parser
 import Data.List (intercalate)
-import Data.ByteString.Builder.Prim (emptyB)
+import Control.Monad (join)
 
 
 
@@ -29,13 +29,13 @@ fillToTwenty s = if length s < 20
 data SymbolInformation =
     EnumerationSymbol {possibleValues :: [EnumerationValue]}
     | GenerationSymbol
-    | BlueprintSymbol {properties :: [String]}
+    | BlueprintSymbol {properties :: [Property]}
     | BlueprintUsageSymbol {blueprint :: String, propertyValues :: Map.Map String String}
 
 instance Show SymbolInformation where
     show (EnumerationSymbol a)      = "Enumeration (" ++ intercalate "," (map show a) ++ ")"
     show GenerationSymbol           = "Generation"
-    show (BlueprintSymbol a)        = "Blueprint (" ++ intercalate "," a ++ ")"
+    show (BlueprintSymbol a)        = "Blueprint (" ++ intercalate "," [show a] ++ ")"
     show (BlueprintUsageSymbol a b) = "BlueprintUsage BP="
         ++ a
         ++ ", PropertyValues: "
@@ -51,24 +51,21 @@ data RequiresRule =
     SetsValueArea String [String] -- Identifier, ValueArea
     deriving (Show)
 
+data Property = Property String
+    | Ellipse
+    deriving (Show)
 
 
 
 
 semanticAnalysis :: AST -> Either String SymbolTable
-semanticAnalysis (AST ParameterDefinition _ children) = do
-    identifier <- getIdentifier children
-    symbolInfo <- getSymbolInformation children
-    return $ Map.singleton identifier symbolInfo
-
 semanticAnalysis ast@(AST ParameterStatement _ children) =
     case statementType ast of
         Right Enumeration    -> analyzeEnumerationStatement ast
         Right Generation     -> analyzeGenerationStatement ast
-        --Right Blueprint      -> analyzeBlueprintStatement ast
+        Right Blueprint      -> analyzeBlueprintStatement ast
         --Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
         Left x               -> Left x
-
 semanticAnalysis (AST _ _ children)  = do
     list <- mapM semanticAnalysis children
     return $ foldl Map.union Map.empty list
@@ -101,9 +98,9 @@ analyzeEnumerationStatement (AST ParameterStatement _
         req@(AST Requires _ _),
         def2@(AST ParameterDefinition _ _)
     ]) = do
-    id1 <- getIdentifier $ children def1
+    id1 <- getIdentifier def1
     enumInfo1 <- getEnumerationInfo def1
-    id2 <- getIdentifier $ children def2
+    id2 <- getIdentifier def2
     enumInfo2 <- getEnumerationInfo def2
     enumInfo1WRules <- enrichWithRules enumInfo1 id2 enumInfo2
     return $ Map.fromList
@@ -112,11 +109,11 @@ analyzeEnumerationStatement (AST ParameterStatement _
             (id2, enumInfo2)
         ]
 
-analyzeEnumerationStatement (AST ParameterStatement _ 
+analyzeEnumerationStatement (AST ParameterStatement _
     [
         def@(AST ParameterDefinition _ _)
     ]) = do
-    id <- getIdentifier $ children def
+    id <- getIdentifier def
     enumInfo <- getEnumerationInfo def
     return $ Map.singleton id enumInfo
 
@@ -192,11 +189,24 @@ getRequiresValueAreaRule reqId requires =
 
 
 
-getIdentifier :: [AST] -> Either String String
-getIdentifier (ast:asts) = if label ast == Identifier
-    then Right $ value ast
-    else getIdentifier asts
-getIdentifier [] = Left "No identifier found"
+getIdentifier :: AST -> Either String String
+getIdentifier ast = 
+    let identifiers = getIdentifierList ast
+    in case length identifiers of
+        0 -> Left $ "No identifier found in following AST: \n" ++ show ast
+        1 -> Right $ head identifiers
+        x -> Left $ 
+            "Ambiguous Result: Found more than one identifier in AST: \n" 
+            ++ show ast
+
+getIdentifierList :: AST -> [String]
+getIdentifierList (AST ParameterDefinition _ (c:cs)) = do
+    if label c == Identifier
+        then return $ value c
+        else return []
+getIdentifierList (AST _ _ cs) = do
+    join $ mapM getIdentifierList cs
+
 
 getSymbolInformation :: [AST] -> Either String SymbolInformation
 getSymbolInformation (ast:asts) =
@@ -211,9 +221,37 @@ getSymbolInformation (ast:asts) =
 getSymbolInformation [] = Left "No ParameterInformation found"
 
 
--- Analyze Generation Symbol
+-- Analyze Generation Statements
 
 analyzeGenerationStatement :: AST -> Either String SymbolTable
 analyzeGenerationStatement ast = do
-    id <- getIdentifier $ children ast
+    id <- getIdentifier ast
     return $ Map.singleton id GenerationSymbol
+
+
+-- Analyze Blueprint Statements
+
+analyzeBlueprintStatement :: AST -> Either String SymbolTable
+analyzeBlueprintStatement ast = do
+    identifier <- getIdentifier ast
+    props <- leftIfEmpty "No properties found" (getProperties ast)
+    return $ Map.singleton identifier (BlueprintSymbol props)
+
+getProperties :: AST -> [Property]
+getProperties (AST Parser.Property v _) = [SemanticAnalyzer.Property v]
+getProperties (AST Parser.Ellipse v _) = [SemanticAnalyzer.Ellipse]
+getProperties (AST _ _ children) = concatMap getProperties children
+
+
+-- Analyze BlueprintUsage Statements
+
+{- analyzeBlueprintUsageStatement :: AST -> Either String SymbolTable
+analyzeBlueprintUsageStatement = do -}
+
+
+-- Helper
+
+leftIfEmpty :: a -> [b] -> Either a [b]
+leftIfEmpty a b
+    | null b    = Left a
+    | otherwise = Right b
