@@ -2,14 +2,17 @@ module Parser where
 
 import Text.Parsec
 import GHC.Show (Show)
-import Data.Tree (Tree(Node))
+import Data.Tree (Tree(Node), drawTree)
 import Text.Parsec.Token (GenLanguageDef(caseSensitive))
 
 data AST = AST {
     label    :: Label,
     value    :: String,
     children :: [AST]
-    } deriving (Show)
+    }
+
+instance Show AST where
+    show ast = drawTree $ toDataTree ast
 
 data Label = CoderunnerFile
     | ParameterSection

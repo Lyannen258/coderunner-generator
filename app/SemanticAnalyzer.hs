@@ -5,6 +5,7 @@ import Parser
 import Control.Monad (join)
 import Data.List
 import Debug.Trace
+import Data.Tree (drawTree)
 
 
 
@@ -63,7 +64,7 @@ semanticAnalysis ast@(AST ParameterStatement _ children) =
         Right Enumeration    -> analyzeEnumerationStatement ast
         Right Generation     -> analyzeGenerationStatement ast
         Right Blueprint      -> analyzeBlueprintStatement ast
-        --Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
+        Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
         Left x               -> Left x
 semanticAnalysis (AST _ _ children) = do
     list <- mapM semanticAnalysis children
@@ -301,8 +302,22 @@ getProperties (AST _ _ children) = concatMap getProperties children
 
 -- Analyze BlueprintUsage Statements
 
-{- analyzeBlueprintUsageStatement :: AST -> Either String SymbolTable
-analyzeBlueprintUsageStatement = do -}
+analyzeBlueprintUsageStatement :: AST -> Either String SymbolTable
+analyzeBlueprintUsageStatement ast = do
+    identifier <- getIdentifier ast
+    blueprint <- getBlueprint ast
+    return $ Map.singleton identifier $ BlueprintUsageSymbol blueprint Map.empty
+
+getBlueprint :: AST -> Either String String
+getBlueprint ast = case getBlueprints ast of
+    [bp] -> Right bp
+    bps -> Left $ "Expected exactly one identifier for BlueprintUsage in subtree: " ++ show ast ++ "\nfound: " ++ show bps
+    where
+        getBlueprints :: AST -> [String]
+        getBlueprints (AST BlueprintUsage _ (c:cs)) =
+            [value c | label c == Identifier]
+        getBlueprints (AST _ _ cs) = concatMap getBlueprints cs
+
 
 
 -- Helper
