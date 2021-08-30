@@ -6,8 +6,8 @@ import Control.Monad (join)
 import Data.List
 import Debug.Trace
 import Data.Tree (drawTree)
-
-
+import Data.Set (fromList)
+import Data.Maybe (fromMaybe)
 
 newtype SemanticResult = SemanticResult SymbolTable
 
@@ -32,7 +32,8 @@ data SymbolInformation =
     EnumerationSymbol {possibleValues :: [EnumerationValue]}
     | GenerationSymbol
     | BlueprintSymbol {properties :: [Property]}
-    | BlueprintUsageSymbol {blueprint :: String, propertyValues :: Map.Map String String}
+    | BlueprintUsageSymbol {blueprint :: String, propertyValues :: Map.Map String [String]}
+    | BlueprintUsageSymbolValuesOnly {blueprint :: String, values :: [String]}
 
 instance Show SymbolInformation where
     show (EnumerationSymbol a)      = "Enumeration (" ++ intercalate "," (map show a) ++ ")"
@@ -41,7 +42,11 @@ instance Show SymbolInformation where
     show (BlueprintUsageSymbol a b) = "BlueprintUsage BP="
         ++ a
         ++ ", PropertyValues: "
-        ++ intercalate ", " (map (\(a,b) -> a ++ b) $ Map.toList b)
+        ++ intercalate ", " (map (\(a,b) -> a ++ show b) (Map.toList b))
+    show (BlueprintUsageSymbolValuesOnly a b) = "BlueprintUsage Values Only BP="
+        ++ a
+        ++ ", Values: "
+        ++ intercalate ", " [show b]
 
 data EnumerationValue = EnumerationValue {
     enumValue :: String,
@@ -53,21 +58,26 @@ data RequiresRule =
     SetsValueArea String [String] -- Identifier, ValueArea
     deriving (Show)
 
-data Property = Property String
+data Property = Property {name :: String}
     | Ellipse
-    deriving (Show)
+    deriving (Show, Eq)
 
 
 semanticAnalysis :: AST -> Either String SymbolTable
-semanticAnalysis ast@(AST ParameterStatement _ children) =
+semanticAnalysis ast = do
+    firstTable <- semanticAnalysisMain ast
+    getBPUsageProperties firstTable
+
+semanticAnalysisMain :: AST -> Either String SymbolTable
+semanticAnalysisMain ast@(AST ParameterStatement _ children) =
     case statementType ast of
         Right Enumeration    -> analyzeEnumerationStatement ast
         Right Generation     -> analyzeGenerationStatement ast
         Right Blueprint      -> analyzeBlueprintStatement ast
         Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
         Left x               -> Left x
-semanticAnalysis (AST _ _ children) = do
-    list <- mapM semanticAnalysis children
+semanticAnalysisMain (AST _ _ children) = do
+    list <- mapM semanticAnalysisMain children
     return $ foldl mergeTableParts Map.empty list
 
 mergeTableParts :: SymbolTable -> SymbolTable -> SymbolTable
@@ -306,7 +316,8 @@ analyzeBlueprintUsageStatement :: AST -> Either String SymbolTable
 analyzeBlueprintUsageStatement ast = do
     identifier <- getIdentifier ast
     blueprint <- getBlueprint ast
-    return $ Map.singleton identifier $ BlueprintUsageSymbol blueprint Map.empty
+    values <- leftIfEmpty ("No value for BlueprintUsage found:\n" ++ show ast) (getValues ast)
+    return $ Map.singleton identifier $ BlueprintUsageSymbolValuesOnly blueprint values
 
 getBlueprint :: AST -> Either String String
 getBlueprint ast = case getBlueprints ast of
@@ -318,6 +329,10 @@ getBlueprint ast = case getBlueprints ast of
             [value c | label c == Identifier]
         getBlueprints (AST _ _ cs) = concatMap getBlueprints cs
 
+getValues :: AST -> [String]
+getValues (AST Value v _) = [v]
+getValues (AST _ _ cs) = concatMap getValues cs
+
 
 
 -- Helper
@@ -326,3 +341,59 @@ leftIfEmpty :: a -> [b] -> Either a [b]
 leftIfEmpty a b
     | null b    = Left a
     | otherwise = Right b
+
+
+
+
+
+
+-- BlueprintUsage add properties and values
+
+getBPUsageProperties :: SymbolTable -> Either String SymbolTable
+getBPUsageProperties table =
+    let predicate (BlueprintUsageSymbolValuesOnly _ _) = True
+        predicate _ = False
+        onlyBUs = Map.filter predicate table
+        addProperties a = do
+            let symbolInfoMaybe = Map.lookup (blueprint a) table
+            symbolInfo <- case symbolInfoMaybe of
+                Nothing -> Left $ "No entry for key '" ++ blueprint a ++ "# in Map:\n" ++ show table
+                Just si -> Right si
+            pvs <- valuesAndPropertiesToMap (properties symbolInfo) (values a)
+            return (BlueprintUsageSymbol (blueprint a) pvs)
+        onlyBUsDone = do
+            symbolInfos <- mapM addProperties (Map.elems onlyBUs)
+            return $ Map.fromList $ zip (Map.keys onlyBUs) symbolInfos
+    in do
+        busDone <- onlyBUsDone
+        Right $ Map.union busDone table -- union prefers left map in case of duplicate keys
+
+
+zipExtend :: [a] -> [b] -> [(a, b)]
+zipExtend a b
+    | length a == length b = zip a b
+    | length a > length b = zip a (extend b (length a))
+    | length a < length b = zip (extend a (length b)) b
+    where extend l i = if length l < i
+            then extend (l ++ [last l]) i
+            else l
+
+valuesAndPropertiesToMap :: [Property] -> [String] -> Either String (Map.Map String [String])
+valuesAndPropertiesToMap properties values =
+    let propertiesWOEllipse = if hasEllipse
+            then init properties else properties
+        hasEllipse = case last properties of
+            SemanticAnalyzer.Ellipse -> True
+            SemanticAnalyzer.Property _ -> False
+        isValid
+          | length propertiesWOEllipse == length values = True
+          | length propertiesWOEllipse < length values && hasEllipse = True
+          | otherwise = False
+        zipped = zipExtend (map name propertiesWOEllipse) values
+        folder :: Map.Map String [String] -> (String, String) -> Map.Map String [String]
+        folder m (prop, val) = if prop `Map.member` m
+            then Map.insert prop ((m Map.! prop) ++ [val]) m
+            else Map.insert prop [val] m
+    in if isValid
+        then Right $ foldl folder Map.empty zipped
+        else Left $ "Amount of properties and amount of values does not match.\nProperties: " ++ show properties ++ "\nValues: " ++ show values
