@@ -3,20 +3,23 @@ module Interaction where
 import SemanticAnalyzer
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Control.Monad (join)
+import Control.Monad (join, foldM)
 import Text.Read (readMaybe)
 import Data.List
-import SemanticAnalyzer (RequiresRule)
+import Parser
+import GHC.Show (Show)
 
 data UsageDecision =
     ChooseValues |
     ChooseAmount
+    deriving (Show)
 
 data InteractionResult =
     ValueResult (Map String [String]) |
     AmountResult Int
+    deriving (Show)
 
-questionUser :: SymbolTable -> IO InteractionResult
+questionUser :: SymbolTable -> IO (Either String InteractionResult)
 questionUser table = do
     decision <- selfOrAmount
     case decision of
@@ -34,13 +37,14 @@ selfOrAmount = do
     where message = "Do you want to choose values for the parameters yourself (self) or do you want to specify an amount of exercises (amount) ?"
           failed = do {putStr "Not a valid choice"; selfOrAmount}
 
-chooseValues :: SymbolTable -> IO InteractionResult
+chooseValues :: SymbolTable -> IO (Either String InteractionResult)
 chooseValues table = do
-    myMap <- Map.foldrWithKey folder (return Map.empty) table
-    return $ ValueResult Map.empty
+    enumMap <- Map.foldrWithKey enumFolder (return Map.empty) table
+    let enumAndGenMap = do { myMap <- Map.foldrWithKey genFolder (Right enumMap) table; return $ ValueResult myMap}
+    return enumAndGenMap
     where
-        folder :: String -> SymbolInformation -> IO (Map String [String]) -> IO (Map String [String])
-        folder key value@(EnumerationSymbol values) accum = do
+        enumFolder :: String -> SymbolInformation -> IO (Map String [String]) -> IO (Map String [String])
+        enumFolder key value@(EnumerationSymbol values) accum = do
             accumRaw <- accum
             if key `Map.member` accumRaw
             then accum
@@ -55,6 +59,44 @@ chooseValues table = do
                             Nothing -> Map.empty
                     let finalAccum = Map.union newAccum1 newAccum2
                     return finalAccum
+        enumFolder _ _ accum = accum
+
+        genFolder :: String -> SymbolInformation -> Either String (Map String [String]) -> Either String (Map String [String])
+        genFolder key value@(GenerationSymbol parts) accumE = do
+            accum <- accumE
+            if key `Map.member` accum
+            then accumE
+            else addValue
+            where 
+                addValue = do
+                    accum <- accumE
+                    gen <- buildGen parts accum
+                    let newAccum = Map.insert key [gen] accum
+                    return newAccum
+
+
+
+        genFolder _ _ accum = accum
+            
+
+buildGen :: [AST] -> Map String [String] -> Either String String 
+buildGen asts table = foldM folder "" asts
+    where 
+        folder accum ast@(AST ArbitraryPart val _) =
+            Right $ accum ++ val
+        folder accum (AST Identifier id _) = do
+            let maybeVal = Map.lookup id table
+            valList <- case maybeVal of
+                    Nothing -> Left ("Could not find identifier '" ++ id ++ "'")
+                    Just a -> Right a
+            val <- case valList of
+                    [] -> Left $ "No value found for identifier: " ++ id
+                    [v] -> Right v
+                    vs -> Left $ "Identifier '" ++ id ++ "' was set by a Requires-relationship and has multiple values. You can only use single-value identifiers in generations"
+            return $ accum ++ val
+        folder _ ast = Left $ "Unexpected AST-Node in GenerationSymbol: " ++ show ast
+
+        
 
 
 

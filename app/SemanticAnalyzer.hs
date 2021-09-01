@@ -31,14 +31,14 @@ fillToTwenty s = if length s < 20
 
 data SymbolInformation =
     EnumerationSymbol {possibleValues :: [EnumerationValue]}
-    | GenerationSymbol
+    | GenerationSymbol [AST]
     | BlueprintSymbol {properties :: [Property]}
     | BlueprintUsageSymbol {blueprint :: String, propertyValues :: Map.Map String [String]}
     | BlueprintUsageSymbolValuesOnly {blueprint :: String, values :: [String]}
 
 instance Show SymbolInformation where
     show (EnumerationSymbol a)      = "Enumeration (" ++ intercalate "," (map show a) ++ ")"
-    show GenerationSymbol           = "Generation"
+    show (GenerationSymbol a)          = "Generation"
     show (BlueprintSymbol a)        = "Blueprint (" ++ intercalate "," [show a] ++ ")"
     show (BlueprintUsageSymbol a b) = "BlueprintUsage BP="
         ++ a
@@ -284,7 +284,7 @@ getSymbolInformation (ast:asts) =
     if label ast == ParameterInformation
         then case label $ head $ children ast of
             Enumeration    -> Right $ EnumerationSymbol []
-            Generation      -> Right GenerationSymbol
+            Generation      -> Right $ GenerationSymbol []
             Blueprint      -> Right $ BlueprintSymbol []
             BlueprintUsage -> Right $ BlueprintUsageSymbol "test" Map.empty
             x                -> Left $ "Label '" ++ show x ++ "' invalid"
@@ -297,7 +297,13 @@ getSymbolInformation [] = Left "No ParameterInformation found"
 analyzeGenerationStatement :: AST -> Either String SymbolTable
 analyzeGenerationStatement ast = do
     id <- getIdentifier ast
-    return $ Map.singleton id GenerationSymbol
+    parts <- leftIfEmpty message $ getGenerationParts ast
+    return $ Map.singleton id $ GenerationSymbol parts
+    where message = "No parts for the generation found in AST:\n" ++ show ast
+
+getGenerationParts :: AST -> [AST]
+getGenerationParts (AST Generation _ cs) = cs
+getGenerationParts (AST _ _ cs) = concatMap getGenerationParts cs
 
 
 -- Analyze Blueprint Statements

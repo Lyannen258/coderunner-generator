@@ -6,6 +6,7 @@ import Data.Tree(drawTree)
 import System.IO
 import System.FilePath (takeDirectory, takeBaseName)
 import SemanticAnalyzer
+import Interaction
 
 main :: IO ()
 main = do
@@ -28,6 +29,17 @@ analyzeFile filePath = do
 
     let semanticResult = parseToSemantic parseResult >>= semanticAnalysis
     writeSemanticResult filePath semanticResult
+
+    valueResult <- case semanticResult of
+            Right tbl -> questionUser tbl
+            Left err -> return (Left err)
+
+    let output = do { ast <- parseToSemantic parseResult;
+                      st <- semanticResult;
+                      vt <- valueResult;
+                      generateOutput ast st vt }
+
+    return ()
 
 
 -- Parse Functions
