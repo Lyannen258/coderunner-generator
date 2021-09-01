@@ -8,6 +8,7 @@ import Text.Read (readMaybe)
 import Data.List
 import Parser
 import GHC.Show (Show)
+import Helper
 
 data UsageDecision =
     ChooseValues |
@@ -57,7 +58,7 @@ chooseValues table = do
                     let newAccum2 = case maybeEV of
                             Just ev -> evaluateRules (rules ev)
                             Nothing -> Map.empty
-                    let finalAccum = Map.union newAccum1 newAccum2
+                    let finalAccum = Map.union newAccum2 newAccum1
                     return finalAccum
         enumFolder _ _ accum = accum
 
@@ -96,9 +97,6 @@ buildGen asts table = foldM folder "" asts
             return $ accum ++ val
         folder _ ast = Left $ "Unexpected AST-Node in GenerationSymbol: " ++ show ast
 
-        
-
-
 
 evaluateRules :: [RequiresRule] -> Map String [String]
 evaluateRules = foldr folder Map.empty
@@ -106,6 +104,7 @@ evaluateRules = foldr folder Map.empty
         folder rule accum = case rule of
             RequiresValue id val  -> Map.insert id [val] accum
             SetsValueArea id vals -> Map.insert id vals accum
+
 
 chooseFromValueArea :: String -> SymbolInformation -> IO String
 chooseFromValueArea key symbolInfo = do
