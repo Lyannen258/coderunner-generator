@@ -8,6 +8,7 @@ import System.FilePath (takeDirectory, takeBaseName)
 import SemanticAnalyzer
 import Interaction
 import Generator
+import Helper
 
 main :: IO ()
 main = do
@@ -38,7 +39,7 @@ analyzeFile filePath = do
     let finalResult = do { ast <- parseToSemantic parseResult;
                       st <- semanticResult;
                       vt <- valueResult;
-                      generateOutput ast st vt }
+                      generateOutput ast st (debug vt) }
 
     writeFinalResult filePath finalResult
 

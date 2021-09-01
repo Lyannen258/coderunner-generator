@@ -10,15 +10,31 @@ import Parser
 import GHC.Show (Show)
 import Helper
 
+
+-- Types and associated functions
+
 data UsageDecision =
     ChooseValues |
     ChooseAmount
     deriving (Show)
 
 data InteractionResult =
-    ValueResult (Map String [String]) |
+    ValueResult {valueTable :: Map String [String]} |
     AmountResult Int
     deriving (Show)
+
+getIrValues :: String -> InteractionResult -> Either String [String]
+getIrValues k vt = do
+    let maybeValue = Map.lookup k $ valueTable vt
+    maybeToEither maybeValue $ "No matching value for Identifier '" ++ k ++ "' found"
+
+getIrSingleValue :: String -> InteractionResult -> Either String String
+getIrSingleValue k vt = do
+    values <- getIrValues k vt
+    return $ head values
+
+
+-- Functions
 
 questionUser :: SymbolTable -> IO (Either String InteractionResult)
 questionUser table = do
