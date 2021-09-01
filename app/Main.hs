@@ -39,7 +39,7 @@ analyzeFile filePath = do
     let finalResult = do { ast <- parseToSemantic parseResult;
                       st <- semanticResult;
                       vt <- valueResult;
-                      generateOutput ast st (debug vt) }
+                      generateOutput ast st vt }
 
     writeFinalResult filePath finalResult
 
@@ -48,7 +48,7 @@ analyzeFile filePath = do
 
 writeParseResult :: String -> Either ParseError AST -> IO ()
 writeParseResult filePath parseResult = do
-    let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath
+    let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath ++ ".txt"
     outputHandle <- openFile astPath WriteMode
     hSetEncoding outputHandle utf8
     hPutStr outputHandle $ parseResultToString parseResult
@@ -67,7 +67,7 @@ parseResultToString parseResult = case parseResult of
 
 writeSemanticResult :: String -> Either String SymbolTable -> IO ()
 writeSemanticResult filePath result = do
-    let stPath = takeDirectory filePath ++ "/ST_" ++ takeBaseName filePath
+    let stPath = takeDirectory filePath ++ "/ST_" ++ takeBaseName filePath ++ ".txt"
     outputHandle <- openFile stPath WriteMode
     hSetEncoding outputHandle utf8
     hPutStr outputHandle $ semanticResultToString result
@@ -85,7 +85,7 @@ writeFinalResult filePath result =
             Left err -> err
             Right res -> res
     in do
-        let resPath = takeDirectory filePath ++ "/Res_" ++ takeBaseName filePath
+        let resPath = takeDirectory filePath ++ "/Res_" ++ takeBaseName filePath ++ ".xml"
         outputHandle <- openFile resPath WriteMode
         hSetEncoding outputHandle utf8
         hPutStr outputHandle output

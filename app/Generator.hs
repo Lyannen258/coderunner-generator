@@ -8,6 +8,8 @@ import qualified Data.Map as M
 import Helper
 import Data.List (intercalate)
 import Text.Read
+import Text.XML.Light
+
 
 generateOutput :: AST -> SymbolTable -> InteractionResult -> Either String String
 generateOutput ast@(AST CoderunnerFile _ (_:task:sol:pre:cs)) st vt = do
@@ -15,8 +17,16 @@ generateOutput ast@(AST CoderunnerFile _ (_:task:sol:pre:cs)) st vt = do
     solGen <- generateBody sol st vt
     preGen <- generateBody pre st vt
     let ret = intercalate "\n\n" [taskGen, solGen, preGen]
-    return $ ret
-    
+    let xmlDoc =
+            node (unqual "quiz") $
+                add_attr (Attr (unqual "type") "coderunner") (node (unqual "question")  [
+                    node (unqual "questiontext") (Attr (unqual "format") "html", 
+                        node (unqual "text") (CData CDataText taskGen Nothing)),
+                    node (unqual "answer") (CData CDataVerbatim solGen Nothing),
+                    node (unqual "template") (CData CDataVerbatim preGen Nothing)
+                ])
+    return $ ppTopElement xmlDoc
+
 
 generateBody :: AST -> SymbolTable -> InteractionResult -> Either String String
 generateBody (AST TaskSection _ (body:cs)) st vt = generateBody body st vt
@@ -63,12 +73,12 @@ analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop [AST FunctionCallPa
         then ""
         else value (head optArg)
     applyFunctionCall prop args values
-    where 
-        applyFunctionCall "ALL" _ values = 
+    where
+        applyFunctionCall "ALL" _ values =
             Right $ intercalate "\n" values
         applyFunctionCall "CHOOSE_AT_RANDOM" arg values =
             case readMaybe arg of
-                Just i -> if i <= length values 
+                Just i -> if i <= length values
                             then Right $ intercalate "\n" $ take i values
                             else Left "More random values requested than there are in the list"
                 Nothing -> Left "CHOOSE_AT_RANDOM was called with a non-integer argument"
