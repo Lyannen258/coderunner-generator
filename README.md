@@ -10,4 +10,6 @@ Aktuell werden lediglich die drei Beispieldateien im Input-Ordner analysiert. Da
 
 Für jede Datei müssen die Parameter manuell gesetzt werden (Das Programm fragt zwar nach 'self' und 'amount', allerdings funktioniert nur 'self'). Die Parameter müssen exakt eingetippt werden. Die Reihenfolge ist bei der Parameterabfrage noch nicht optimiert. Die REQUIRES-Beziehungen werden zwar korrekt angewendet und überprüft, allerdings nur im Nachhinein, bzw. nebenläufig. Deshalb werden gesetzte Parameter teilweise wieder überschrieben.
 
+Auch die Tests haben es leider nicht ins endgültige Ergebnis geschafft.
+
 Alles weitere werde ich bei der Präsentation erklären.
