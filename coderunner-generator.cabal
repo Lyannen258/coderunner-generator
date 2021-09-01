@@ -28,7 +28,9 @@ executable coderunner-generator
     other-modules:
       Parser,
       SemanticAnalyzer,
-      Interaction
+      Interaction,
+      Generator,
+      Helper
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

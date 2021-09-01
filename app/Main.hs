@@ -7,6 +7,7 @@ import System.IO
 import System.FilePath (takeDirectory, takeBaseName)
 import SemanticAnalyzer
 import Interaction
+import Generator
 
 main :: IO ()
 main = do
@@ -34,12 +35,12 @@ analyzeFile filePath = do
             Right tbl -> questionUser tbl
             Left err -> return (Left err)
 
-    let output = do { ast <- parseToSemantic parseResult;
+    let finalResult = do { ast <- parseToSemantic parseResult;
                       st <- semanticResult;
                       vt <- valueResult;
                       generateOutput ast st vt }
 
-    return ()
+    writeFinalResult filePath finalResult
 
 
 -- Parse Functions
@@ -74,6 +75,20 @@ writeSemanticResult filePath result = do
 semanticResultToString :: Either String SymbolTable -> String 
 semanticResultToString (Left a) = a
 semanticResultToString (Right b) = showSymbolTable b
+
+
+-- Final result
+writeFinalResult :: String -> Either String String -> IO ()
+writeFinalResult filePath result = 
+    let output = case result of
+            Left err -> err
+            Right res -> res
+    in do
+        let resPath = takeDirectory filePath ++ "/Res_" ++ takeBaseName filePath
+        outputHandle <- openFile resPath WriteMode
+        hSetEncoding outputHandle utf8
+        hPutStr outputHandle output
+        hClose outputHandle
 
 
 -- Helper
