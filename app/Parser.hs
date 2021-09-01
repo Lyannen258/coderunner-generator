@@ -261,7 +261,7 @@ identifierParser = do
 propertyPartParser :: Parsec String () AST
 propertyPartParser = do
     string "->"
-    propertyName <- many1 upper
+    propertyName <- many1 (char '_' <|> upper)
     functionCallPart <- optionMaybe functionCallPartParser
     return $ AST PropertyPart propertyName
         (case functionCallPart of
