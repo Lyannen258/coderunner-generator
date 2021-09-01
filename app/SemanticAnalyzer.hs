@@ -8,6 +8,7 @@ import Debug.Trace
 import Data.Tree (drawTree)
 import Data.Set (fromList)
 import Data.Maybe (fromMaybe)
+import qualified GHC.Generics as Map
 
 newtype SemanticResult = SemanticResult SymbolTable
 
@@ -120,13 +121,14 @@ analyzeEnumerationStatement (AST ParameterStatement _
     enumInfo1 <- getEnumerationInfo def1
     id2 <- getIdentifier def2
     enumInfo2 <- getEnumerationInfo def2
-    enumInfo1WRules <- enrichWithRules enumInfo1 id2 enumInfo2
-
-    return $ Map.fromList
-        [
-            (id1, enumInfo1WRules),
-            (id2, enumInfo2)
-        ]
+    ruleResult <- enrichWithRules enumInfo1 id2 enumInfo2
+    case ruleResult of
+        ("RequiresValue", x) -> return $ Map.fromList
+            [
+                (id1, x),
+                (id2, enumInfo2)
+            ]
+        ("SetsValueArea", y) -> return $ Map.singleton id1 y
 
 analyzeEnumerationStatement (AST ParameterStatement _
     [
@@ -209,12 +211,14 @@ mergeEnumerationValue' (a, b) = trace
 
 -- Requires Rule Functions
 
-enrichWithRules :: SymbolInformation -> String -> SymbolInformation -> Either String SymbolInformation
+enrichWithRules :: SymbolInformation -> String -> SymbolInformation -> Either String (String, SymbolInformation)
 enrichWithRules base reqId requires
-    | length (possibleValues base) == length (possibleValues requires) =
-        enrichWithValueRule base reqId requires
-    | length (possibleValues base) == 1 && length (possibleValues requires) > 1 =
-        enrichWithValueAreaRule base reqId requires
+    | length (possibleValues base) == length (possibleValues requires) = do
+        symbolInfo <- enrichWithValueRule base reqId requires
+        return ("RequiresValue", symbolInfo)
+    | length (possibleValues base) == 1 && length (possibleValues requires) > 1 = do
+        symbolInfo <- enrichWithValueAreaRule base reqId requires
+        return ("SetsValueArea", symbolInfo)
     | otherwise =
         Left "Amount of enumeration values on the left and right side of 'Requires' must be equal or amount on the left side must be 1"
 
