@@ -6,20 +6,15 @@ import Helper
 import Interaction
 import Parser
 import SemanticAnalyzer
+import System.Environment (getArgs)
 import System.FilePath (takeBaseName, takeDirectory)
 import System.IO
 import Text.Parsec
 
 main :: IO ()
 main = do
-  let listOfPath =
-        map
-          ("../Input/" ++)
-          [ "01_writing_a_statement.txt",
-            "02_missing_parts_of_code.txt",
-            "03_errors_in_the_code.txt"
-          ]
-  mapM_ analyzeFile listOfPath
+  args <- getArgs
+  mapM_ analyzeFile args
 
 analyzeFile :: String -> IO ()
 analyzeFile filePath = do
