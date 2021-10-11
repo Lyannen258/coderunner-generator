@@ -9,6 +9,8 @@ import Helper
 import Parser
 import SemanticAnalyzer
 import Text.Read (readMaybe)
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Class
 
 -- Types and associated functions
 
@@ -34,9 +36,9 @@ getIrSingleValue k vt = do
 
 -- Functions
 
-questionUser :: SymbolTable -> IO (Either String InteractionResult)
+questionUser :: SymbolTable -> ExceptT String IO InteractionResult
 questionUser table = do
-  decision <- selfOrAmount
+  decision <- lift selfOrAmount
   case decision of
     ChooseValues -> chooseValues table
 
@@ -54,18 +56,18 @@ selfOrAmount = do
     message = "Do you want to choose values for the parameters yourself (self) or do you want to specify an amount of exercises (amount) ?"
     failed = do putStr "Not a valid choice"; selfOrAmount
 
-chooseValues :: SymbolTable -> IO (Either String InteractionResult)
+chooseValues :: SymbolTable -> ExceptT String IO InteractionResult
 chooseValues table = do
   enumMap <- Map.foldrWithKey enumFolder (return Map.empty) table
   let enumAndGenMap = do myMap <- Map.foldrWithKey genFolder (Right enumMap) table; return $ ValueResult myMap
-  return enumAndGenMap
+  except enumAndGenMap
   where
-    enumFolder :: String -> SymbolInformation -> IO (Map String [String]) -> IO (Map String [String])
+    enumFolder :: String -> SymbolInformation -> ExceptT String IO (Map String [String]) -> ExceptT String IO (Map String [String])
     enumFolder key value@(EnumerationSymbol values) accum = do
       accumRaw <- accum
       if key `Map.member` accumRaw
         then accum
-        else addValues accumRaw
+        else lift $ addValues accumRaw
       where
         addValues accumRaw = do
           decision <- chooseFromValueArea key value

@@ -40,7 +40,8 @@ executable coderunner-generator
       xml,
       containers,
       filepath,
-      text
+      text,
+      transformers
 
     hs-source-dirs:   app
     default-language: Haskell2010

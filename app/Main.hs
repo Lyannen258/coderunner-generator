@@ -10,6 +10,7 @@ import System.Environment (getArgs)
 import System.FilePath (takeBaseName, takeDirectory)
 import System.IO
 import Text.Parsec
+import Control.Monad.Trans.Except (runExceptT)
 
 main :: IO ()
 main = do
@@ -29,7 +30,7 @@ analyzeFile filePath = do
   writeSemanticResult filePath semanticResult
 
   valueResult <- case semanticResult of
-    Right tbl -> questionUser tbl
+    Right tbl -> runExceptT $ questionUser tbl
     Left err -> return (Left err)
 
   let finalResult = do
