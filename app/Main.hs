@@ -36,7 +36,7 @@ analyzeFile filePath = do
         ast <- parseToSemantic parseResult
         st <- semanticResult
         vt <- valueResult
-        generateOutput ast st vt
+        generateOutput ast st vt filePath
 
   writeFinalResult filePath finalResult
 
