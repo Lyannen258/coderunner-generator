@@ -1,0 +1,21 @@
+Parameter:
+$CHOICE({$NUMERAL,$NUMBER})
+$NUMERAL(I,V,X,L,C,D,M) REQUIRES $NUMBER(1,5,10,50,100,500,1000)
+$CHOICES({if(numeral=='$NUMERAL') return $NUMBER;})
+Aufgabenstellung:
+Complete the given code so that it returns the number corresponding to the roman numeral. Roman numeral to number ({I,1};{V,5};{X,10};{L,50};{C,100};{D,500};{M,1000})
+Lösung:
+int NumeralToNumber(char numeral){
+    $CHOICES->ALL()
+}
+Vorbelegung:
+int NumeralToNumber(char numeral){
+    $CHOICES->CHOOSE_AT_RANDOM(4)
+}
+Tests:
+cout << NumeralToNumber('I');
+Expected Outcome: 1
+cout << NumeralToNumber('V');
+Expected Outcome: 5
+cout << NumeralToNumber('X');
+Expected Outcome: 10

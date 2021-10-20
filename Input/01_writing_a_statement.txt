@@ -1,0 +1,26 @@
+Parameter:
+$OPERATION(addition, substraction, multiplication, division, modulo) REQUIRES $OPERATOR(+,-,*,/,%)
+$OPERATION(modulo) REQUIRES $TYPE(int)
+$TYPE(int, double)
+$TYPE(int) REQUIRES $INPUT({17,5};{3,2};{8,3};{14,3};{17,7})
+$TYPE(double) REQUIRES $INPUT({7.5,5.0};{3.4,2.2};{8.0,3.7};{14.0,3.0};{17.1,7.2})
+Aufgabenstellung:
+Complete the given function so that its “result” is defined as $TYPE and returns the $OPERATION of the two
+parameters passed to the function by value.
+Lösung:
+auto $OPERATION($TYPE m, $TYPE n)
+{
+ $TYPE result = m $OPERATOR n;
+ return result;
+}
+Vorbelegung:
+auto $OPERATION ($TYPE m, $TYPE n)
+{
+ //Input your code here
+ return result;
+}
+Tests:
+if($OPERATION($INPUT) == solution($INPUT) {
+cout << “true”;
+}
+Expected Outcome: true 
