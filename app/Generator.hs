@@ -10,6 +10,7 @@ import SemanticAnalyzer
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
+import Data.Strings (strReplace)
 
 generateOutput :: AST -> SymbolTable -> InteractionResult -> FilePath -> Either String String
 generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt filePath = do
@@ -17,6 +18,7 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
   solGen <- generateBody sol st vt
   preGen <- generateBody pre st vt
   let nameGen = takeBaseName filePath
+  -- let solTemp = createSolutionTemplate preGen "modulo"
   let ret = intercalate "\n\n" [taskGen, solGen, preGen]
   let xmlDoc =
         node (unqual "quiz") $
@@ -48,6 +50,7 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
                   node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
                   node (unqual "answerpreload") (CData CDataVerbatim preGen Nothing),
               -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
+                  node (unqual "template") (CData CDataVerbatim solTemp Nothing),
                   node (unqual "answer") (CData CDataVerbatim solGen Nothing),
                   node (unqual "validateonsave") (CData CDataText "1" Nothing),
                   node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
@@ -63,6 +66,11 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
                 ]
             )
   return $ ppTopElement xmlDoc
+
+--createSolutionTemplate :: String -> String -> String
+--createSolutionTemplate haystack needle = strReplace needle "solution" haystack
+-- Perhapts using Regex-> Text.Regex subRegex sieht da ganz gut aus.
+
 
 generateBody :: AST -> SymbolTable -> InteractionResult -> Either String String
 generateBody (AST TaskSection _ (body : cs)) st vt = generateBody body st vt
