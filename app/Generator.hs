@@ -50,7 +50,7 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
                   node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
                   node (unqual "answerpreload") (CData CDataVerbatim preGen Nothing),
               -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
-                  node (unqual "template") (CData CDataVerbatim solTemp Nothing),
+                  -- node (unqual "template") (CData CDataVerbatim solTemp Nothing),
                   node (unqual "answer") (CData CDataVerbatim solGen Nothing),
                   node (unqual "validateonsave") (CData CDataText "1" Nothing),
                   node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
