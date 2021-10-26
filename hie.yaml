@@ -1,3 +1,10 @@
 cradle:
   cabal:
-    component: "coderunner-generator:exe:coderunner-generator"
+    - path: "app/Main.hs"
+      component: "coderunner-generator:exe:coderunner-generator"
+
+    - path: "app/InteractionLinux.hs"
+      component: "coderunner-generator:exe:coderunner-generator"
+
+    - path: "app/InteractionWindows.hs"
+      component: "coderunner-generator:exe:coderunner-generator"
