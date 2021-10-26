@@ -1,0 +1,31 @@
+Parameter:
+$TYPE(int,double,float)
+$INPUT({2,2,2};{3,3,3};{3,2,4})
+$STATEMENT(@RIGHTANSWER, @WRONGANSWER, ...)
+$FIRSTSTATEMENT($STATEMENT(2*a,3*a,a*b))
+$SECONDSTATEMENT($STATEMENT(-b,+c,*a))
+$THIRDSTATEMENT($STATEMENT(*c,*5,+c))
+Aufgabenstellung:
+The shown functions are written based on the following specifications: - The function and variables are of type $TYPE. -
+There are errors in the code. Find and correct them errors.
+Lösung:
+$TYPE function ($TYPE a, $TYPE b, $TYPE c){
+$TYPE temp;
+temp = $FIRSTSTATEMENT->RIGHTANSWER;
+temp = temp $SECONDSTATEMENT->RIGHTANSWER;
+temp = temp $THIRDSTATEMENT->RIGHTANSWER;
+return temp;
+}
+Vorbelegung:
+$TYPE function ($TYPE a, $TYPE b, $TYPE c){
+$TYPE temp;
+temp = $FIRSTSTATEMENT->WRONGANSWER;
+temp = temp $SECONDSTATEMENT->WRONGANSWER;
+temp = temp $THIRDSTATEMENT->WRONGANSWER;
+return temp;
+}
+Tests:
+if(function($INPUT)== solution($INPUT)){
+    cout << ‘true’;
+}
+Expected Outcome: true

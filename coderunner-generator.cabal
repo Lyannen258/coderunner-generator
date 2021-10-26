@@ -31,6 +31,13 @@ executable coderunner-generator
       Interaction,
       Generator,
       Helper
+    
+    if os(windows)
+      other-modules: InteractionWindows
+      cpp-options: -DWindows
+    else
+      other-modules: InteractionLinux
+      cpp-options: -DLinux
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -41,7 +48,9 @@ executable coderunner-generator
       containers,
       filepath,
       text,
-      transformers
+      transformers,
+      directory
 
     hs-source-dirs:   app
     default-language: Haskell2010
+    default-extensions: CPP

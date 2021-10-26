@@ -7,14 +7,16 @@ import Helper
 import Interaction
 import Parser
 import SemanticAnalyzer
+import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
 
-generateOutput :: AST -> SymbolTable -> InteractionResult -> Either String String
-generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt = do
+generateOutput :: AST -> SymbolTable -> InteractionResult -> FilePath -> Either String String
+generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt filePath = do
   taskGen <- generateBody task st vt
   solGen <- generateBody sol st vt
   preGen <- generateBody pre st vt
+  let nameGen = takeBaseName filePath
   let ret = intercalate "\n\n" [taskGen, solGen, preGen]
   let xmlDoc =
         node (unqual "quiz") $
@@ -22,13 +24,42 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt = do
             (Attr (unqual "type") "coderunner")
             ( node
                 (unqual "question")
-                [ node
+                [
+                node (unqual "name")
+                  (
+                    node (unqual "text") (CData CDataText nameGen Nothing)
+                  ),
+                  node
                     (unqual "questiontext")
                     ( Attr (unqual "format") "html",
                       node (unqual "text") (CData CDataText taskGen Nothing)
                     ),
+                  node (unqual "defaultgrade") (CData CDataText "1" Nothing),
+                  node (unqual "penalty") (CData CDataText "0" Nothing),
+                  node (unqual "hidden") (CData CDataText "0" Nothing),
+                  node (unqual "coderunnertype") (CData CDataText "cpp_function" Nothing),
+                  node (unqual "prototypetype") (CData CDataText "0" Nothing),
+                  node (unqual "allornothing") (CData CDataText "1" Nothing),
+                  node (unqual "penaltyregime") (CData CDataText "10, 20, ..." Nothing),
+                  node (unqual "precheck") (CData CDataText "0" Nothing),
+                  node (unqual "hidecheck") (CData CDataText "0" Nothing),
+                  node (unqual "showsource") (CData CDataText "0" Nothing),
+                  node (unqual "answerboxlines") (CData CDataText "18" Nothing),
+                  node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
+                  node (unqual "answerpreload") (CData CDataVerbatim preGen Nothing),
+              -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
                   node (unqual "answer") (CData CDataVerbatim solGen Nothing),
-                  node (unqual "template") (CData CDataVerbatim preGen Nothing)
+                  node (unqual "validateonsave") (CData CDataText "1" Nothing),
+                  node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
+                  node (unqual "templateparamslang") (CData CDataText "twig" Nothing),
+                  node (unqual "templateparamsevalpertry") (CData CDataText "0" Nothing),
+                  node (unqual "templateparamsevald") (CData CDataText "{}" Nothing),
+                  node (unqual "twigall") (CData CDataText "0" Nothing),
+                  node (unqual "attachments") (CData CDataText "0" Nothing),
+                  node (unqual "attachmentsrequired") (CData CDataText "0" Nothing),
+                  node (unqual "maxfilesize") (CData CDataText "10240" Nothing),
+                  node (unqual "displayfeedback") (CData CDataText "1" Nothing)
+                  -- #TODO testcases for each input value.
                 ]
             )
   return $ ppTopElement xmlDoc

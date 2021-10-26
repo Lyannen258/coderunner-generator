@@ -7,8 +7,9 @@ import Interaction
 import Parser
 import SemanticAnalyzer
 import System.Environment (getArgs)
-import System.FilePath (takeBaseName, takeDirectory)
+import System.FilePath (takeBaseName, takeDirectory, (</>), takeExtension, dropExtension)
 import System.IO
+import System.Directory
 import Text.Parsec
 import Control.Monad.Trans.Except (runExceptT)
 
@@ -22,6 +23,8 @@ analyzeFile filePath = do
   inputHandle <- openFile filePath ReadMode
   hSetEncoding inputHandle utf8
   fileContent <- hGetContents inputHandle
+
+  createOutputDirectory filePath
 
   let parseResult = parseString fileContent
   writeParseResult filePath parseResult
@@ -37,15 +40,22 @@ analyzeFile filePath = do
         ast <- parseToSemantic parseResult
         st <- semanticResult
         vt <- valueResult
-        generateOutput ast st vt
+        generateOutput ast st vt filePath
 
   writeFinalResult filePath finalResult
+
+
+-- Output Directory
+
+createOutputDirectory :: FilePath -> IO ()
+createOutputDirectory filePath = do
+  createDirectoryIfMissing True $ dropExtension filePath
 
 -- Parse Functions
 
 writeParseResult :: String -> Either ParseError AST -> IO ()
 writeParseResult filePath parseResult = do
-  let astPath = takeDirectory filePath ++ "/AST_" ++ takeBaseName filePath ++ ".txt"
+  let astPath = takeDirectory filePath </> takeBaseName filePath ++ "/AST.txt"
   outputHandle <- openFile astPath WriteMode
   hSetEncoding outputHandle utf8
   hPutStr outputHandle $ parseResultToString parseResult
@@ -63,7 +73,7 @@ parseResultToString parseResult = case parseResult of
 
 writeSemanticResult :: String -> Either String SymbolTable -> IO ()
 writeSemanticResult filePath result = do
-  let stPath = takeDirectory filePath ++ "/ST_" ++ takeBaseName filePath ++ ".txt"
+  let stPath = takeDirectory filePath </> takeBaseName filePath ++ "/ST.txt"
   outputHandle <- openFile stPath WriteMode
   hSetEncoding outputHandle utf8
   hPutStr outputHandle $ semanticResultToString result
@@ -80,7 +90,7 @@ writeFinalResult filePath result =
         Left err -> err
         Right res -> res
    in do
-        let resPath = takeDirectory filePath ++ "/Res_" ++ takeBaseName filePath ++ ".xml"
+        let resPath = takeDirectory filePath </> takeBaseName filePath ++ "/Res.xml"
         outputHandle <- openFile resPath WriteMode
         hSetEncoding outputHandle utf8
         hPutStr outputHandle output
