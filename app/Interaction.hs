@@ -20,7 +20,7 @@ import InteractionLinux
 
 #else
 
-#error Unsuported platform
+#error Unsupported Platform
 
 #endif
 
