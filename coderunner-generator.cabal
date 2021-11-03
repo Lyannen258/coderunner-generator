@@ -50,8 +50,13 @@ executable coderunner-generator
       text,
       transformers,
       directory,
-      strings
+      strings,
+      brick,
+      vty,
+      microlens,
+      microlens-th
 
     hs-source-dirs:   app
     default-language: Haskell2010
     default-extensions: CPP
+    ghc-options: -threaded
