@@ -15,14 +15,16 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
 import qualified Data.Map as M
-import Data.Sequence (Seq, empty, fromList, length, mapWithIndex, (|>))
+import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
+import qualified Data.Sequence as Seq (index)
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
 import Lens.Micro
 import Lens.Micro.TH -- for makeLenses
 -- for makeLenses
-import SemanticAnalyzer (SymbolInformation, SymbolTable)
+import SemanticAnalyzer (SymbolInformation (EnumerationSymbol), SymbolTable, EnumerationValue (EnumerationValue, enumValue), RequiresRule (SetsValueArea, RequiresValue))
 import Text.ParserCombinators.Parsec.Char (tab)
+import Text.ParserCombinators.Parsec.Token (GenTokenParser(symbol))
 
 -- Data Types
 
@@ -58,7 +60,8 @@ data State = State
     _step :: Step,
     _ui :: UI,
     _valueTable :: ValueTable,
-    _symbolTable :: SymbolTable
+    _symbolTable :: SymbolTable,
+    _currentParameter :: String
   }
 
 makeLenses ''State
@@ -74,11 +77,15 @@ initialState table =
             _index = 0
           },
       _valueTable = M.empty,
-      _symbolTable = table
+      _symbolTable = table,
+      _currentParameter = ""
     }
 
 getValueAmount :: State -> Int
-getValueAmount state = Data.Sequence.length $ state ^. ui . values
+getValueAmount state = length $ state ^. ui . values
+
+currentValue :: State -> String
+currentValue state = (state ^. ui . values) `Seq.index` (state ^. ui . index)
 
 -- App definition
 
@@ -147,6 +154,8 @@ previousElement state
 nextStep :: State -> EventM n (Next State)
 nextStep state
   | state ^. step == ChooseMode = nextStepFromChooseMode state
+  | state ^. step == ChooseParameter = chooseValueForParameterStep state
+  | state ^. step == ChooseValueForParameter = (chooseParameterStep . addValueFromSelection) state
   | otherwise = halt state
 
 nextStepFromChooseMode :: State -> EventM n (Next State)
@@ -160,7 +169,71 @@ chooseParameterStep state =
   continue $
       state
         & set step ChooseParameter
-        & set (ui . values) (fromList (M.keys (state ^. symbolTable))) -- Schreibweise: https://mail.haskell.org/pipermail/haskell-cafe/2013-November/111288.html
+        & set (ui . values) (fromList (M.keys (enumerationSymbolsOnly (state ^. symbolTable)))) -- Notation: https://mail.haskell.org/pipermail/haskell-cafe/2013-November/111288.html
+
+
+-- | Takes a state and adds the selected value to the value
+-- table
+addValueFromSelection :: State -> State
+addValueFromSelection state =
+  state
+    & over valueTable (M.insert (state ^. currentParameter) [currentValue state])
+
+
+-- | Takes a symbol table and returns a symbol table
+-- where everything except EnumerationSymbols is removed 
+enumerationSymbolsOnly :: SymbolTable -> SymbolTable
+enumerationSymbolsOnly = M.filter f
+  where f v = case v of
+          EnumerationSymbol _ -> True
+          _ -> False
+
+
+chooseValueForParameterStep :: State -> EventM n (Next State)
+chooseValueForParameterStep state =
+  continue $
+      state
+        & set currentParameter (currentValue state)
+        & set step ChooseValueForParameter
+        & set (ui . values) (possibleValues (currentValue state) (state ^. valueTable) (state ^. symbolTable))
+
+-- | Takes a symbol table, a value table and a parameter
+-- name of an EnumerationSymbol and returns possible 
+-- values for the parameter
+-- 
+-- Takes Requires-Rules and current values of other
+-- parameters into account (that is why a value table
+-- is needed)
+possibleValues :: String -> ValueTable -> SymbolTable -> Seq String
+possibleValues parameter vTable sTable = possibleValuesForEnumerationSymbol parameter vTable (sTable M.! parameter)
+
+-- | Takes a parameter an EnumerationSymbol and a value 
+-- table and returns possible values for the EnumerationSymbol
+-- with regard to the current value table.
+possibleValuesForEnumerationSymbol :: String -> ValueTable -> SymbolInformation -> Seq String
+possibleValuesForEnumerationSymbol parameter valueTable (EnumerationSymbol enumValues) =
+  fromList $
+    map enumValue $
+    filter (valueValid parameter valueTable) enumValues
+possibleValuesForEnumerationSymbol _ _ _ = error "Called possibleValuesForEnumerationSymbol with non-EnumerationSymbol"
+
+-- | Takes a parameter, an enumeration value and a value
+-- table and returns a sequence of possible values with
+-- regard to the value table
+valueValid :: String -> ValueTable -> EnumerationValue -> Bool
+valueValid parameter valueTable (EnumerationValue value requiresRules) =
+  foldr (ruleValid parameter valueTable) True requiresRules
+
+-- | Takes a parameter, a value table, a requires rool and an
+-- accumulator and returns the accumulator + if the rule is
+-- affected
+ruleValid :: String -> ValueTable -> RequiresRule -> Bool -> Bool
+ruleValid _ _ (SetsValueArea _ _) accum = accum
+ruleValid param vTable (RequiresValue secondParam secondValue) accum =
+  accum &&
+    case M.lookup secondParam vTable of
+      Nothing -> True
+      Just a -> length a == 1 && head a == secondValue
 
 -- Interface
 
