@@ -113,7 +113,7 @@ analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop [AST FunctionCallPa
   let args =
         if null optArg
           then ""
-          else value (head optArg)
+          else Parser.value (head optArg)
   applyFunctionCall prop args values
   where
     applyFunctionCall "ALL" _ values =

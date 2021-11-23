@@ -1,14 +1,55 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module SemanticAnalyzer where
 
 import Control.Monad (join)
+import qualified Data.Graph.Inductive as G
 import Data.List
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set (fromList)
 import Data.Tree (drawTree)
 import Debug.Trace
-import qualified GHC.Generics as Map
+import Lens.Micro.TH (makeLenses)
 import Parser
+  ( AST (AST, children, label),
+    Label
+      ( Blueprint,
+        BlueprintUsage,
+        Enumeration,
+        Generation,
+        Identifier,
+        ParameterDefinition,
+        ParameterInformation,
+        ParameterStatement,
+        Requires,
+        Value
+      ),
+  )
+import qualified Parser as P
+
+data ConstraintNode = ConstraintNode
+  { _parameter :: String,
+    _value :: String
+  }
+  deriving (Eq, Ord, Show)
+
+makeLenses ''ConstraintNode
+
+data Constraint
+  = Exact
+  | OneOf
+  | AllOf
+  deriving (Eq, Ord, Show)
+
+type ConstraintGraph = G.Gr ConstraintNode Constraint
+
+-- Problem: siehe $INPUT im ersten Beispiel. Da brauchen wir eine Liste.
+-- Das wird aber schwierig, wenn mehrere Parameter Listen sind, eine konsistente
+-- Konfiguration zu behalten. Möglicherweise doch auch die Kanten im Graph be-
+-- schriften mit ONE-OF oder ALL-OF. Dann muss allerdings auch die Syntax angepasst
+-- werden, da ONE-OF und ALL-OF syntaktisch identisch wären. Gutes Keyword für ALL-OF
+-- statt Required wäre Set
 
 newtype SemanticResult = SemanticResult SymbolTable
 
@@ -66,22 +107,75 @@ data Property
   | Ellipse
   deriving (Show, Eq)
 
-semanticAnalysis :: AST -> Either String SymbolTable
+semanticAnalysis :: AST -> Either String (SymbolTable, ConstraintGraph)
 semanticAnalysis ast = do
-  firstTable <- semanticAnalysisMain ast
-  getBPUsageProperties firstTable
+  result <- semanticAnalysisMain ast
+  let symbolTable = fst result
+  let graph = snd result
+  symbolTable2 <- getBPUsageProperties symbolTable
+  return (symbolTable2, graph)
 
-semanticAnalysisMain :: AST -> Either String SymbolTable
-semanticAnalysisMain ast@(AST ParameterStatement _ children) =
+semanticAnalysisMain :: AST -> Either String (SymbolTable, ConstraintGraph)
+semanticAnalysisMain ast@(AST ParameterStatement _ children) = do
   case statementType ast of
     Right Enumeration -> analyzeEnumerationStatement ast
-    Right Generation -> analyzeGenerationStatement ast
-    Right Blueprint -> analyzeBlueprintStatement ast
-    Right BlueprintUsage -> analyzeBlueprintUsageStatement ast
+    Right Generation -> analyzeGenerationStatement ast >>= symbolTableToTuple
+    Right Blueprint -> analyzeBlueprintStatement ast >>= symbolTableToTuple
+    Right BlueprintUsage -> analyzeBlueprintUsageStatement ast >>= symbolTableToTuple
     Left x -> Left x
+    Right _ -> Left "Unknown statement type"
 semanticAnalysisMain (AST _ _ children) = do
   list <- mapM semanticAnalysisMain children
-  return $ foldl mergeTableParts Map.empty list
+  let symbolTable = foldl mergeTableParts Map.empty (map fst list)
+  let graph = mergeMultipleGraphs (map snd list)
+  return (symbolTable, graph)
+
+merge2Graphs :: ConstraintGraph -> ConstraintGraph -> ConstraintGraph
+merge2Graphs a b = G.run_ b mergeA
+  where
+    nodesOfA = G.labNodes a
+    labelsOfAUnfiltered = map snd nodesOfA
+    edgesOfA = getNodeMapEdges a
+    nodesOfB = G.labNodes b
+    labelsOfB = map snd nodesOfB
+    labelsOfA = filter (`notElem` labelsOfB) labelsOfAUnfiltered
+    mergeA = do
+      G.insMapNodesM labelsOfA
+      G.insMapEdgesM edgesOfA
+
+merge2Graphs' a b =
+  if printSth then trace print result else result
+  where
+    printSth = not (a == G.empty || b == G.empty)
+    result = merge2Graphs a b
+    print = "A:\n" ++
+      G.prettify a ++
+      "B:\n" ++
+      G.prettify b ++
+      "Result:\n" ++
+      G.prettify result
+
+mergeMultipleGraphs :: [ConstraintGraph] -> ConstraintGraph
+mergeMultipleGraphs = foldl merge2Graphs' G.empty
+
+mergeMultipleGraphs' :: [G.Gr ConstraintNode Constraint] -> ConstraintGraph
+mergeMultipleGraphs' gs =
+  trace
+    (intercalate "\n" (map G.prettify gs))
+    (mergeMultipleGraphs gs)
+
+getNodeMapEdges :: G.DynGraph g => g a b -> [(a, a, b)]
+getNodeMapEdges g = catMaybes maybeNodeMapEdges
+  where
+    edges = G.labEdges g
+    maybeNodeMapEdges = map (getNodeMapEdge g) edges
+
+
+getNodeMapEdge :: G.DynGraph g => g a b -> G.LEdge b -> Maybe (a, a, b)
+getNodeMapEdge g (a, b, lbl) = do
+  labelA <- G.lab g a
+  labelB <- G.lab g b
+  return (labelA, labelB, lbl)
 
 mergeTableParts :: SymbolTable -> SymbolTable -> SymbolTable
 mergeTableParts t1 t2 =
@@ -107,9 +201,12 @@ statementType (AST ParameterInformation _ children) = statementType $ head child
 statementType _ =
   Left "ParameterStatement does not contain a parameter definition"
 
+symbolTableToTuple :: SymbolTable -> Either String (SymbolTable, ConstraintGraph)
+symbolTableToTuple st = Right (st, G.empty)
+
 -- Analyze Enumeration Parameter Statement
 
-analyzeEnumerationStatement :: AST -> Either String SymbolTable
+analyzeEnumerationStatement :: AST -> Either String (SymbolTable, ConstraintGraph)
 analyzeEnumerationStatement
   ( AST
       ParameterStatement
@@ -126,12 +223,15 @@ analyzeEnumerationStatement
     ruleResult <- enrichWithRules enumInfo1 id2 enumInfo2
     case ruleResult of
       ("RequiresValue", x) ->
-        return $
-          Map.fromList
-            [ (id1, x),
-              (id2, enumInfo2)
-            ]
-      ("SetsValueArea", y) -> return $ Map.singleton id1 y
+        return
+          ( Map.fromList
+              [ (id1, x),
+                (id2, enumInfo2)
+              ],
+            buildGraphFromEnumInfo id1 x
+          )
+      ("SetsValueArea", y) -> return (Map.singleton id1 y, G.empty) -- TODO G.empty
+      _ -> return (Map.empty, G.empty)
 analyzeEnumerationStatement
   ( AST
       ParameterStatement
@@ -141,7 +241,10 @@ analyzeEnumerationStatement
     ) = do
     id <- getIdentifier def
     enumInfo <- getEnumerationInfo def
-    return $ Map.singleton id enumInfo
+    return
+      ( Map.singleton id enumInfo,
+        buildGraphFromEnumInfo id enumInfo
+      )
 analyzeEnumerationStatement _ = Left "Malformed enumeration statement"
 
 getEnumerationInfo :: AST -> Either String SymbolInformation
@@ -213,6 +316,26 @@ mergeEnumerationValue' (a, b) =
     )
     (mergeEnumerationValue (a, b))
 
+buildGraphFromEnumInfo :: String -> SymbolInformation -> ConstraintGraph
+buildGraphFromEnumInfo id (EnumerationSymbol vs) = G.run_ G.empty buildNodeMap
+  where
+    buildNodeMap = do
+      let values = map enumValue vs
+      G.insMapNodesM $ map (ConstraintNode id) values
+
+      mapM_ (buildFromEnumValue id) vs
+    buildFromEnumValue id v = do
+      let node = ConstraintNode id (enumValue v)
+      G.insMapNodeM node
+      mapM_ (buildFromRequires node) (rules v)
+    buildFromRequires outNode rule = do
+      let node = case rule of
+            (RequiresValue param value) -> ConstraintNode param value
+            (SetsValueArea param values) -> ConstraintNode param (head values) -- TODO nicht nur head values sondern für alle
+      G.insMapNodeM node
+      G.insMapEdgeM (outNode, node, Exact)
+buildGraphFromEnumInfo _ _ = G.empty
+
 -- Requires Rule Functions
 
 enrichWithRules :: SymbolInformation -> String -> SymbolInformation -> Either String (String, SymbolInformation)
@@ -276,7 +399,7 @@ getIdentifier ast =
 getIdentifierList :: AST -> [String]
 getIdentifierList (AST ParameterDefinition _ (c : cs)) = do
   if label c == Identifier
-    then return $ value c
+    then return $ P.value c
     else return []
 getIdentifierList (AST _ _ cs) = do
   join $ mapM getIdentifierList cs
@@ -316,8 +439,8 @@ analyzeBlueprintStatement ast = do
   return $ Map.singleton identifier (BlueprintSymbol props)
 
 getProperties :: AST -> [Property]
-getProperties (AST Parser.Property v _) = [SemanticAnalyzer.Property v]
-getProperties (AST Parser.Ellipse v _) = [SemanticAnalyzer.Ellipse]
+getProperties (AST P.Property v _) = [Property v]
+getProperties (AST P.Ellipse v _) = [Ellipse]
 getProperties (AST _ _ children) = concatMap getProperties children
 
 -- Analyze BlueprintUsage Statements
@@ -336,7 +459,7 @@ getBlueprint ast = case getBlueprints ast of
   where
     getBlueprints :: AST -> [String]
     getBlueprints (AST BlueprintUsage _ (c : cs)) =
-      [value c | label c == Identifier]
+      [P.value c | label c == Identifier]
     getBlueprints (AST _ _ cs) = concatMap getBlueprints cs
 
 getValues :: AST -> [String]
@@ -389,8 +512,8 @@ valuesAndPropertiesToMap properties values =
           then init properties
           else properties
       hasEllipse = case last properties of
-        SemanticAnalyzer.Ellipse -> True
-        SemanticAnalyzer.Property _ -> False
+        Ellipse -> True
+        Property _ -> False
       isValid
         | length propertiesWOEllipse == length values = True
         | length propertiesWOEllipse < length values && hasEllipse = True

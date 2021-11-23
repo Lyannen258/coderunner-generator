@@ -24,7 +24,7 @@ import Graphics.Vty.Input.Events
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import SemanticAnalyzer (EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable)
+import SemanticAnalyzer (EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, ConstraintGraph)
 
 -- Internal stuff to make each work with sequence
 
@@ -293,7 +293,7 @@ getIrValues k vt = Right ["Hello"]
 getIrSingleValue :: String -> InteractionResult -> Either String String
 getIrSingleValue k vt = Right "Hello"
 
-questionUser :: SymbolTable -> ExceptT String IO InteractionResult
+questionUser :: (SymbolTable, ConstraintGraph) -> ExceptT String IO InteractionResult
 questionUser table = do
-  finalState <- lift $ defaultMain app (initialState table)
+  finalState <- lift $ defaultMain app (initialState $ fst table)
   except $ Left "Test"

@@ -1,17 +1,18 @@
 module Main where
 
+import Control.Monad.Trans.Except (runExceptT)
 import Data.Tree (drawTree)
 import Generator
 import Helper
 import Interaction
 import Parser
-import SemanticAnalyzer
-import System.Environment (getArgs)
-import System.FilePath (takeBaseName, takeDirectory, (</>), takeExtension, dropExtension)
-import System.IO
+import qualified SemanticAnalyzer as SA
 import System.Directory
+import System.Environment (getArgs)
+import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
+import System.IO
 import Text.Parsec
-import Control.Monad.Trans.Except (runExceptT)
+import Data.Graph.Inductive (prettify)
 
 main :: IO ()
 main = do
@@ -29,7 +30,7 @@ analyzeFile filePath = do
   let parseResult = parseString fileContent
   writeParseResult filePath parseResult
 
-  let semanticResult = parseToSemantic parseResult >>= semanticAnalysis
+  let semanticResult = parseToSemantic parseResult >>= SA.semanticAnalysis
   writeSemanticResult filePath semanticResult
 
   valueResult <- case semanticResult of
@@ -40,10 +41,9 @@ analyzeFile filePath = do
         ast <- parseToSemantic parseResult
         st <- semanticResult
         vt <- valueResult
-        generateOutput ast st vt filePath
+        generateOutput ast (fst st) vt filePath
 
   writeFinalResult filePath finalResult
-
 
 -- Output Directory
 
@@ -55,11 +55,10 @@ createOutputDirectory filePath = do
 
 writeParseResult :: String -> Either ParseError AST -> IO ()
 writeParseResult filePath parseResult = do
-  let astPath = takeDirectory filePath </> takeBaseName filePath ++ "/AST.txt"
-  outputHandle <- openFile astPath WriteMode
-  hSetEncoding outputHandle utf8
-  hPutStr outputHandle $ parseResultToString parseResult
-  hClose outputHandle
+  writeToFile
+    filePath
+    "/AST.txt"
+    (parseResultToString parseResult)
 
 parseString :: String -> Either ParseError AST
 parseString = parse coderunnerParser ""
@@ -71,17 +70,15 @@ parseResultToString parseResult = case parseResult of
 
 -- Semantic Analysis Functions
 
-writeSemanticResult :: String -> Either String SymbolTable -> IO ()
+writeSemanticResult :: String -> Either String (SA.SymbolTable, SA.ConstraintGraph) -> IO ()
 writeSemanticResult filePath result = do
-  let stPath = takeDirectory filePath </> takeBaseName filePath ++ "/ST.txt"
-  outputHandle <- openFile stPath WriteMode
-  hSetEncoding outputHandle utf8
-  hPutStr outputHandle $ semanticResultToString result
-  hClose outputHandle
+  let output = case result of
+        Right (st, cg) -> (SA.showSymbolTable st, prettify cg)
+        Left err -> (err, err)
+  writeToFile filePath "/ST.txt" (fst output)
+  writeToFile filePath "/CG.txt" (snd output)
 
-semanticResultToString :: Either String SymbolTable -> String
-semanticResultToString (Left a) = a
-semanticResultToString (Right b) = showSymbolTable b
+
 
 -- Final result
 writeFinalResult :: String -> Either String String -> IO ()
@@ -90,14 +87,21 @@ writeFinalResult filePath result =
         Left err -> err
         Right res -> res
    in do
-        let resPath = takeDirectory filePath </> takeBaseName filePath ++ "/Res.xml"
-        outputHandle <- openFile resPath WriteMode
-        hSetEncoding outputHandle utf8
-        hPutStr outputHandle output
-        hClose outputHandle
+        writeToFile
+          filePath
+          "/Res.xml"
+          output
 
 -- Helper
 
 parseToSemantic :: Either ParseError a -> Either String a
 parseToSemantic (Left error) = Left "Error while Parsing"
 parseToSemantic (Right a) = Right a
+
+writeToFile :: String -> String -> String -> IO ()
+writeToFile inputFilePath fileName output = do
+  let path = takeDirectory inputFilePath </> takeBaseName inputFilePath ++ fileName
+  outputHandle <- openFile path WriteMode
+  hSetEncoding outputHandle utf8
+  hPutStr outputHandle output
+  hClose outputHandle

@@ -54,7 +54,8 @@ executable coderunner-generator
       brick,
       vty,
       microlens,
-      microlens-th
+      microlens-th,
+      fgl
 
     hs-source-dirs:   app
     default-language: Haskell2010
