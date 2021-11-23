@@ -24,7 +24,10 @@ import Graphics.Vty.Input.Events
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import SemanticAnalyzer (EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, ConstraintGraph)
+import SemanticAnalyzer (EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, ConstraintGraph, ConstraintNode (ConstraintNode), parameter, value)
+import qualified Data.Graph.Inductive as G
+import qualified Helper as H (index)
+import Data.Maybe (catMaybes, fromJust)
 
 -- Internal stuff to make each work with sequence
 
@@ -41,6 +44,8 @@ data InteractionResult
 -- State data type
 
 type ValueTable = M.Map String [String]
+
+type ValueRange = M.Map String [String]
 
 data Mode
   = ToBeDetermined
@@ -73,13 +78,15 @@ data State = State
     _ui :: UI,
     _valueTable :: ValueTable,
     _symbolTable :: SymbolTable,
+    _constraintGraph :: ConstraintGraph,
+    _valueRange :: ValueRange,
     _currentParameter :: String
   }
 
 makeLenses ''State
 
-initialState :: SymbolTable -> State
-initialState table =
+initialState :: SymbolTable -> ConstraintGraph -> State
+initialState table graph =
   State
     { _mode = ToBeDetermined,
       _step = ChooseMode,
@@ -90,6 +97,8 @@ initialState table =
           },
       _valueTable = M.empty,
       _symbolTable = table,
+      _constraintGraph = graph,
+      _valueRange = M.empty,
       _currentParameter = ""
     }
 
@@ -180,7 +189,7 @@ nextStep :: State -> EventM n (Next State)
 nextStep state
   | state ^. step == ChooseMode = nextStepFromChooseMode state
   | state ^. step == ChooseParameter = chooseValueForParameterStep state
-  | state ^. step == ChooseValueForParameter = (chooseParameterStep . validateState . addValueFromSelection) state
+  | state ^. step == ChooseValueForParameter = (chooseParameterStep . evaluateSelection) state
   | otherwise = halt state
 
 nextStepFromChooseMode :: State -> EventM n (Next State)
@@ -201,7 +210,7 @@ chooseParameterStep state =
 buildDataItems :: ValueTable -> SymbolTable -> Seq UIItem
 buildDataItems vTable sTable =
   fromList $
-    zipWith 
+    zipWith
       UIItem
       (M.keys (enumerationSymbolsOnly sTable))
       (visualRepresentations vTable sTable)
@@ -211,10 +220,27 @@ visualRepresentations vTable sTable =
   map (visualRepresentation vTable) (M.keys (enumerationSymbolsOnly sTable))
 
 visualRepresentation :: ValueTable -> String -> String
-visualRepresentation vTable s = 
+visualRepresentation vTable s =
   case M.lookup s vTable of
     Nothing -> s
     Just a -> s ++ " = " ++ show a
+
+-- | Takes a state after a new selection was made by the user.
+-- 
+-- Sets the resulting values in valueTable and valueRange in
+-- consideration of the constraint graph
+evaluateSelection :: State -> State
+evaluateSelection s = set valueTable newValueTable s
+  where
+    g = s ^. constraintGraph
+    nodeLbl = ConstraintNode (s ^. currentParameter) (currentItemIdentifier s)
+    maybeNodeIndex = H.index nodeLbl g
+    nodeIndex = fromJust maybeNodeIndex
+    connectedNodes = G.dfs [nodeIndex] g
+    connectedNodeMaybeLbls = map (G.lab g) connectedNodes
+    connectedNodeLbls = catMaybes connectedNodeMaybeLbls
+    newValueTable = foldl (flip addConstraintNodeToValueTable) (s ^. valueTable) connectedNodeLbls
+
 
 -- | Takes a state and adds the selected value to the value
 -- table
@@ -222,12 +248,10 @@ addValueFromSelection :: State -> State
 addValueFromSelection state =
   state
     & over valueTable (M.insert (state ^. currentParameter) [currentItemIdentifier state])
-  
--- | Takes a state and validates it.
--- Returns the state if it is valid,
--- otherwise corrects it before
-validateState :: State -> State
-validateState state = state -- THIS IS NOT WHAT THE FUNCTION IS SUPPOSED TO DO!!
+
+addConstraintNodeToValueTable :: ConstraintNode -> ValueTable -> ValueTable
+addConstraintNodeToValueTable node = M.insert (node ^. parameter) [node ^. value]
+
 
 -- | Takes a symbol table and returns a symbol table
 -- where everything except EnumerationSymbols is removed
@@ -294,6 +318,6 @@ getIrSingleValue :: String -> InteractionResult -> Either String String
 getIrSingleValue k vt = Right "Hello"
 
 questionUser :: (SymbolTable, ConstraintGraph) -> ExceptT String IO InteractionResult
-questionUser table = do
-  finalState <- lift $ defaultMain app (initialState $ fst table)
+questionUser semResult = do
+  finalState <- lift $ defaultMain app (uncurry initialState semResult)
   except $ Left "Test"
