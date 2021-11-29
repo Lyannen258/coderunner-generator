@@ -16,18 +16,18 @@ import Brick.Widgets.Border
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
+import qualified Data.Graph.Inductive as G
 import qualified Data.Map as M
+import Data.Maybe (catMaybes, fromJust)
 import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
 import qualified Data.Sequence as Seq (index)
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
+import qualified Helper as H (index)
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import SemanticAnalyzer (EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, ConstraintGraph, ConstraintNode (ConstraintNode), parameter, value)
-import qualified Data.Graph.Inductive as G
-import qualified Helper as H (index)
-import Data.Maybe (catMaybes, fromJust)
+import SemanticAnalyzer (Constraint (Exact), ConstraintGraph, ConstraintNode (ConstraintNode), EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, parameter, value)
 
 -- Internal stuff to make each work with sequence
 
@@ -46,6 +46,12 @@ data InteractionResult
 type ValueTable = M.Map String [String]
 
 type ValueRange = M.Map String [String]
+
+addValue :: Ord a => a -> b -> M.Map a [b] -> M.Map a [b]
+addValue key value m =
+  if M.member key m
+    then M.adjust (value :) key m
+    else M.insert key [value] m
 
 data Mode
   = ToBeDetermined
@@ -226,32 +232,73 @@ visualRepresentation vTable s =
     Just a -> s ++ " = " ++ show a
 
 -- | Takes a state after a new selection was made by the user.
--- 
+--
 -- Sets the resulting values in valueTable and valueRange in
 -- consideration of the constraint graph
 evaluateSelection :: State -> State
-evaluateSelection s = set valueTable newValueTable s
+evaluateSelection s = forwardEvaluation s
+
+-- | Performs a depths-first search from the selected value in
+-- the constraint graph (over exact-edges) and sets the corresponding
+-- values in the valueTable
+forwardEvaluation :: State -> State
+forwardEvaluation s = set valueTable newValueTable s
   where
     g = s ^. constraintGraph
     nodeLbl = ConstraintNode (s ^. currentParameter) (currentItemIdentifier s)
     maybeNodeIndex = H.index nodeLbl g
     nodeIndex = fromJust maybeNodeIndex
-    connectedNodes = G.dfs [nodeIndex] g
+    connectedNodes = dfsEdge Exact g nodeIndex
     connectedNodeMaybeLbls = map (G.lab g) connectedNodes
     connectedNodeLbls = catMaybes connectedNodeMaybeLbls
     newValueTable = foldl (flip addConstraintNodeToValueTable) (s ^. valueTable) connectedNodeLbls
 
-
--- | Takes a state and adds the selected value to the value
--- table
-addValueFromSelection :: State -> State
-addValueFromSelection state =
-  state
-    & over valueTable (M.insert (state ^. currentParameter) [currentItemIdentifier state])
-
+-- | Takes a constraint node and inserts it into the value table
 addConstraintNodeToValueTable :: ConstraintNode -> ValueTable -> ValueTable
 addConstraintNodeToValueTable node = M.insert (node ^. parameter) [node ^. value]
 
+-- | Performs a depths-first search from every node in the constraint
+-- graph and looks for exclusionary conditions
+evaluateValueRange :: State -> State
+evaluateValueRange s = set valueRange newValueRange s
+  where
+    g = s ^. constraintGraph
+    vt = s ^. valueTable
+    vr = s ^. valueRange
+    nodes = G.nodes g
+    reachablePerNode = map (dfsEdge Exact g) nodes -- TODO incomplete, only Exact is matched
+    nodeToReachableNodes = M.fromList $ zip nodes reachablePerNode
+    nodeInValueRange = M.map mapper nodeToReachableNodes
+    mapper nodes = foldl folder True nodes
+    folder acc node = acc && not parameterHasDifferentValue
+      where
+        labelFromIndex = fromJust $ G.lab g node
+        p = labelFromIndex ^. parameter
+        v = labelFromIndex ^. value
+        isParameterInValueTable = M.member p vt
+        parameterHasDifferentValue = head (vt M.! p) == v
+    nodesForValueRange = M.keys $ M.filter id nodeInValueRange
+    nodeLabelsForValueRange = map (fromJust . G.lab g) nodesForValueRange
+    newValueRange =
+      foldl
+        (\acc n -> addValue (n ^. parameter) (n ^. value) acc)
+        M.empty
+        nodeLabelsForValueRange
+
+-- | Depth-first search with Constraint type
+--
+-- Takes a constraint, a node and a graph.
+-- Returns all nodes that are reachable along the given constraint.
+dfsEdge :: Constraint -> ConstraintGraph -> G.Node -> [G.Node]
+dfsEdge c g n = G.xdfsWith nodesToGo contextToNode [n] g
+  where
+    contextToNode ct = G.node' ct
+    nodesToGo ct = adjNodesFiltered'
+      where
+        adjNodesWithEdgeLabel = G.lsuc' ct
+        adjNodesFiltered = filter predicate adjNodesWithEdgeLabel
+        predicate (node, linkLabel) = linkLabel == c
+        adjNodesFiltered' = map fst adjNodesFiltered
 
 -- | Takes a symbol table and returns a symbol table
 -- where everything except EnumerationSymbols is removed
