@@ -20,7 +20,7 @@ import qualified Data.Graph.Inductive as G
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromJust)
 import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
-import qualified Data.Sequence as Seq (index)
+import qualified Data.Sequence as Seq (fromList, index)
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
 import qualified Helper as H (index)
@@ -57,17 +57,19 @@ data Mode
   = ToBeDetermined
   | Manual
   | Random
+  deriving (Show)
 
 data Step
   = ChooseMode
   | ChooseParameter
   | ChooseValueForParameter
-  deriving (Eq)
+  deriving (Eq, Show)
 
 data UIItem = UIItem
   { _identifier :: String,
     _displayText :: String
   }
+  deriving (Show)
 
 makeLenses ''UIItem
 
@@ -75,6 +77,7 @@ data UI = UI
   { _values :: Seq UIItem,
     _index :: Int
   }
+  deriving (Show)
 
 makeLenses ''UI
 
@@ -86,27 +89,79 @@ data State = State
     _symbolTable :: SymbolTable,
     _constraintGraph :: ConstraintGraph,
     _valueRange :: ValueRange,
-    _currentParameter :: String
+    _currentParameter :: String,
+    _debug :: String
   }
 
 makeLenses ''State
 
+class Beautify a where
+  beautify :: a -> String
+
+instance Beautify State where
+  beautify s =
+    "\nMode: " ++ show (s ^. mode) ++ "\n"
+      ++ "Step: "
+      ++ show (s ^. step)
+      ++ "\n"
+      ++ "UI: \n"
+      ++ beautify (s ^. ui)
+      ++ "\n"
+      ++ "ValueTable: \n"
+      ++ beautify (s ^. valueTable)
+      ++ "\n"
+      ++ "valueRange: \n"
+      ++ beautify (s ^. valueRange)
+      ++ "\n"
+      ++ "Current Parameter: "
+      ++ s ^. currentParameter
+      ++ "\n"
+      ++ "Debug: \n"
+      ++ s ^. debug
+
+instance (Show a, Show b) => Beautify (M.Map a b) where
+  beautify m = concatMap mapper (M.toList m)
+    where
+      mapper (k, v) = "\t" ++ show k ++ " | " ++ show v ++ "\n"
+
+instance Beautify UI where
+  beautify ui =
+    "\tIndex: " ++ show (ui ^. index)
+      ++ "\n \t"
+      ++ " Values:\n"
+      ++ beautify (ui ^. values)
+
+instance (Beautify a) => Beautify (Seq a) where
+  beautify seq = "\t\t[\n" ++ concatMap beautify seq ++ "\t\t]\n"
+
+instance Beautify UIItem where
+  beautify item = "\t\tIdentifier: " ++ (item ^. identifier) ++ "\n"
+
+instance Beautify a => Beautify [a] where
+  beautify l = "\t\t[\n" ++ concatMap beautify l ++ "\t\t]\n"
+
+instance Beautify String where
+  beautify s = s
+
 initialState :: SymbolTable -> ConstraintGraph -> State
-initialState table graph =
-  State
-    { _mode = ToBeDetermined,
-      _step = ChooseMode,
-      _ui =
-        UI
-          { _values = empty |> UIItem "manual" "Manual" |> UIItem "random" "Random",
-            _index = 0
-          },
-      _valueTable = M.empty,
-      _symbolTable = table,
-      _constraintGraph = graph,
-      _valueRange = M.empty,
-      _currentParameter = ""
-    }
+initialState table graph = evaluateValueRange s
+  where
+    s =
+      State
+        { _mode = ToBeDetermined,
+          _step = ChooseMode,
+          _ui =
+            UI
+              { _values = empty |> UIItem "manual" "Manual" |> UIItem "random" "Random",
+                _index = 0
+              },
+          _valueTable = M.empty,
+          _symbolTable = table,
+          _constraintGraph = graph,
+          _valueRange = M.empty,
+          _currentParameter = "",
+          _debug = ""
+        }
 
 getValueAmount :: State -> Int
 getValueAmount state = length $ state ^. ui . values
@@ -137,7 +192,10 @@ app =
 draw :: State -> [Widget n]
 draw state =
   [ vBox
-      (str "Choose mode:" : (str . show) (state ^. ui . index) : drawValues state)
+      ( [str "Choose mode:"]
+          ++ drawValues state
+          ++ [str ("\n" ++ beautify state)]
+      )
   ]
 
 -- | Takes a state and returns a widget for each
@@ -236,7 +294,7 @@ visualRepresentation vTable s =
 -- Sets the resulting values in valueTable and valueRange in
 -- consideration of the constraint graph
 evaluateSelection :: State -> State
-evaluateSelection s = forwardEvaluation s
+evaluateSelection = evaluateValueRange . forwardEvaluation
 
 -- | Performs a depths-first search from the selected value in
 -- the constraint graph (over exact-edges) and sets the corresponding
@@ -260,7 +318,7 @@ addConstraintNodeToValueTable node = M.insert (node ^. parameter) [node ^. value
 -- | Performs a depths-first search from every node in the constraint
 -- graph and looks for exclusionary conditions
 evaluateValueRange :: State -> State
-evaluateValueRange s = set valueRange newValueRange s
+evaluateValueRange s = set valueRange newValueRange s2
   where
     g = s ^. constraintGraph
     vt = s ^. valueTable
@@ -270,13 +328,13 @@ evaluateValueRange s = set valueRange newValueRange s
     nodeToReachableNodes = M.fromList $ zip nodes reachablePerNode
     nodeInValueRange = M.map mapper nodeToReachableNodes
     mapper nodes = foldl folder True nodes
-    folder acc node = acc && not parameterHasDifferentValue
+    folder acc node = acc && not (isParameterInValueTable && parameterHasDifferentValue)
       where
         labelFromIndex = fromJust $ G.lab g node
         p = labelFromIndex ^. parameter
         v = labelFromIndex ^. value
         isParameterInValueTable = M.member p vt
-        parameterHasDifferentValue = head (vt M.! p) == v
+        parameterHasDifferentValue = head (vt M.! p) /= v
     nodesForValueRange = M.keys $ M.filter id nodeInValueRange
     nodeLabelsForValueRange = map (fromJust . G.lab g) nodesForValueRange
     newValueRange =
@@ -284,6 +342,7 @@ evaluateValueRange s = set valueRange newValueRange s
         (\acc n -> addValue (n ^. parameter) (n ^. value) acc)
         M.empty
         nodeLabelsForValueRange
+    s2 = set debug (beautify nodeInValueRange) s
 
 -- | Depth-first search with Constraint type
 --
@@ -313,48 +372,14 @@ chooseValueForParameterStep :: State -> EventM n (Next State)
 chooseValueForParameterStep state =
   continue $
     state
-      & set currentParameter (currentItemIdentifier state)
+      & set currentParameter p
       & set step ChooseValueForParameter
-      & set (ui . values) (possibleValues (currentItemIdentifier state) (state ^. valueTable) (state ^. symbolTable))
-
--- | Takes a symbol table, a value table and a parameter
--- name of an EnumerationSymbol and returns possible
--- values for the parameter
---
--- Takes Requires-Rules and current values of other
--- parameters into account (that is why a value table
--- is needed)
-possibleValues :: String -> ValueTable -> SymbolTable -> Seq UIItem
-possibleValues parameter vTable sTable = possibleValuesForEnumerationSymbol parameter vTable (sTable M.! parameter)
-
--- | Takes a parameter an EnumerationSymbol and a value
--- table and returns possible values for the EnumerationSymbol
--- with regard to the current value table.
-possibleValuesForEnumerationSymbol :: String -> ValueTable -> SymbolInformation -> Seq UIItem
-possibleValuesForEnumerationSymbol parameter valueTable (EnumerationSymbol enumValues) =
-  fromList $
-    map
-      (stringToUIItem . enumValue)
-      (filter (valueValid parameter valueTable) enumValues)
-possibleValuesForEnumerationSymbol _ _ _ = error "Called possibleValuesForEnumerationSymbol with non-EnumerationSymbol"
-
--- | Takes a parameter, an enumeration value and a value
--- table and returns a sequence of possible values with
--- regard to the value table
-valueValid :: String -> ValueTable -> EnumerationValue -> Bool
-valueValid parameter valueTable (EnumerationValue value requiresRules) =
-  foldr (ruleValid parameter valueTable) True requiresRules
-
--- | Takes a parameter, a value table, a requires rool and an
--- accumulator and returns the accumulator + if the rule is
--- affected
-ruleValid :: String -> ValueTable -> RequiresRule -> Bool -> Bool
-ruleValid _ _ (SetsValueArea _ _) accum = accum
-ruleValid param vTable (RequiresValue secondParam secondValue) accum =
-  accum
-    && case M.lookup secondParam vTable of
-      Nothing -> True
-      Just a -> length a == 1 && head a == secondValue
+      & set (ui . values) uiValuesSeq
+  where
+    p = currentItemIdentifier state
+    valRangeForP = (state ^. valueRange) M.! p
+    uiValues = map (\s -> UIItem s s) valRangeForP
+    uiValuesSeq = Seq.fromList uiValues
 
 -- Interface
 

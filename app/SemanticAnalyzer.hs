@@ -156,7 +156,7 @@ merge2Graphs' a b =
       G.prettify result
 
 mergeMultipleGraphs :: [ConstraintGraph] -> ConstraintGraph
-mergeMultipleGraphs = foldl merge2Graphs' G.empty
+mergeMultipleGraphs = foldl merge2Graphs G.empty
 
 mergeMultipleGraphs' :: [G.Gr ConstraintNode Constraint] -> ConstraintGraph
 mergeMultipleGraphs' gs =
