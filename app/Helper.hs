@@ -1,8 +1,8 @@
 module Helper where
 
-import Debug.Trace
 import qualified Data.Graph.Inductive as G
 import qualified Data.List as L (find)
+import Debug.Trace
 
 debug :: Show a => a -> a
 debug a = trace (show a) a

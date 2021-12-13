@@ -13,10 +13,11 @@ where
 import Brick
 import Brick.Main (defaultMain)
 import Brick.Widgets.Border
+import ConstraintGraph (Constraint, ConstraintGraph, Edge, Value)
+import qualified ConstraintGraph as G
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
-import qualified Data.Graph.Inductive as G
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromJust)
 import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
@@ -27,7 +28,7 @@ import qualified Helper as H (index)
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import SemanticAnalyzer (Constraint (Exact), ConstraintGraph, ConstraintNode (ConstraintNode), EnumerationValue (EnumerationValue, enumValue), RequiresRule (RequiresValue, SetsValueArea), SymbolInformation (EnumerationSymbol), SymbolTable, parameter, value)
+import SemanticAnalyzer (SymbolInformation (EnumerationSymbol), SymbolTable)
 
 -- Internal stuff to make each work with sequence
 
@@ -87,7 +88,7 @@ data State = State
     _ui :: UI,
     _valueTable :: ValueTable,
     _symbolTable :: SymbolTable,
-    _constraintGraph :: ConstraintGraph,
+    _constraintGraph :: G.ConstraintGraph,
     _valueRange :: ValueRange,
     _currentParameter :: String,
     _debug :: String
@@ -144,7 +145,7 @@ instance Beautify String where
   beautify s = s
 
 initialState :: SymbolTable -> ConstraintGraph -> State
-initialState table graph = evaluateValueRange s
+initialState table graph = {- evaluateValueRange -} s
   where
     s =
       State
@@ -253,7 +254,7 @@ nextStep :: State -> EventM n (Next State)
 nextStep state
   | state ^. step == ChooseMode = nextStepFromChooseMode state
   | state ^. step == ChooseParameter = chooseValueForParameterStep state
-  | state ^. step == ChooseValueForParameter = (chooseParameterStep . evaluateSelection) state
+  | state ^. step == ChooseValueForParameter = (chooseParameterStep {-. evaluateSelection-}) state
   | otherwise = halt state
 
 nextStepFromChooseMode :: State -> EventM n (Next State)
@@ -289,75 +290,7 @@ visualRepresentation vTable s =
     Nothing -> s
     Just a -> s ++ " = " ++ show a
 
--- | Takes a state after a new selection was made by the user.
---
--- Sets the resulting values in valueTable and valueRange in
--- consideration of the constraint graph
-evaluateSelection :: State -> State
-evaluateSelection = evaluateValueRange . forwardEvaluation
 
--- | Performs a depths-first search from the selected value in
--- the constraint graph (over exact-edges) and sets the corresponding
--- values in the valueTable
-forwardEvaluation :: State -> State
-forwardEvaluation s = set valueTable newValueTable s
-  where
-    g = s ^. constraintGraph
-    nodeLbl = ConstraintNode (s ^. currentParameter) (currentItemIdentifier s)
-    maybeNodeIndex = H.index nodeLbl g
-    nodeIndex = fromJust maybeNodeIndex
-    connectedNodes = dfsEdge Exact g nodeIndex
-    connectedNodeMaybeLbls = map (G.lab g) connectedNodes
-    connectedNodeLbls = catMaybes connectedNodeMaybeLbls
-    newValueTable = foldl (flip addConstraintNodeToValueTable) (s ^. valueTable) connectedNodeLbls
-
--- | Takes a constraint node and inserts it into the value table
-addConstraintNodeToValueTable :: ConstraintNode -> ValueTable -> ValueTable
-addConstraintNodeToValueTable node = M.insert (node ^. parameter) [node ^. value]
-
--- | Performs a depths-first search from every node in the constraint
--- graph and looks for exclusionary conditions
-evaluateValueRange :: State -> State
-evaluateValueRange s = set valueRange newValueRange s2
-  where
-    g = s ^. constraintGraph
-    vt = s ^. valueTable
-    vr = s ^. valueRange
-    nodes = G.nodes g
-    reachablePerNode = map (dfsEdge Exact g) nodes -- TODO incomplete, only Exact is matched
-    nodeToReachableNodes = M.fromList $ zip nodes reachablePerNode
-    nodeInValueRange = M.map mapper nodeToReachableNodes
-    mapper nodes = foldl folder True nodes
-    folder acc node = acc && not (isParameterInValueTable && parameterHasDifferentValue)
-      where
-        labelFromIndex = fromJust $ G.lab g node
-        p = labelFromIndex ^. parameter
-        v = labelFromIndex ^. value
-        isParameterInValueTable = M.member p vt
-        parameterHasDifferentValue = head (vt M.! p) /= v
-    nodesForValueRange = M.keys $ M.filter id nodeInValueRange
-    nodeLabelsForValueRange = map (fromJust . G.lab g) nodesForValueRange
-    newValueRange =
-      foldl
-        (\acc n -> addValue (n ^. parameter) (n ^. value) acc)
-        M.empty
-        nodeLabelsForValueRange
-    s2 = set debug (beautify nodeInValueRange) s
-
--- | Depth-first search with Constraint type
---
--- Takes a constraint, a node and a graph.
--- Returns all nodes that are reachable along the given constraint.
-dfsEdge :: Constraint -> ConstraintGraph -> G.Node -> [G.Node]
-dfsEdge c g n = G.xdfsWith nodesToGo contextToNode [n] g
-  where
-    contextToNode ct = G.node' ct
-    nodesToGo ct = adjNodesFiltered'
-      where
-        adjNodesWithEdgeLabel = G.lsuc' ct
-        adjNodesFiltered = filter predicate adjNodesWithEdgeLabel
-        predicate (node, linkLabel) = linkLabel == c
-        adjNodesFiltered' = map fst adjNodesFiltered
 
 -- | Takes a symbol table and returns a symbol table
 -- where everything except EnumerationSymbols is removed

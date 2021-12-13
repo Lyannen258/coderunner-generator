@@ -30,7 +30,8 @@ executable coderunner-generator
       SemanticAnalyzer,
       Interaction,
       Generator,
-      Helper
+      Helper,
+      ConstraintGraph
 
     if os(windows)
       other-modules: InteractionWindows

@@ -1,15 +1,20 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module SemanticAnalyzer where
 
+import Brick (getContext)
+import ConstraintGraph ((##>), (#>))
+import qualified ConstraintGraph as CG
 import Control.Monad (join)
-import qualified Data.Graph.Inductive as G
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set (fromList)
 import Data.Tree (drawTree)
 import Debug.Trace
+import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
 import Parser
   ( AST (AST, children, label),
@@ -27,22 +32,6 @@ import Parser
       ),
   )
 import qualified Parser as P
-
-data ConstraintNode = ConstraintNode
-  { _parameter :: String,
-    _value :: String
-  }
-  deriving (Eq, Ord, Show)
-
-makeLenses ''ConstraintNode
-
-data Constraint
-  = Exact
-  | OneOf
-  | AllOf
-  deriving (Eq, Ord, Show)
-
-type ConstraintGraph = G.Gr ConstraintNode Constraint
 
 -- Problem: siehe $INPUT im ersten Beispiel. Da brauchen wir eine Liste.
 -- Das wird aber schwierig, wenn mehrere Parameter Listen sind, eine konsistente
@@ -107,15 +96,15 @@ data Property
   | Ellipse
   deriving (Show, Eq)
 
-semanticAnalysis :: AST -> Either String (SymbolTable, ConstraintGraph)
+semanticAnalysis :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 semanticAnalysis ast = do
   result <- semanticAnalysisMain ast
-  let symbolTable = fst result
-  let graph = snd result
-  symbolTable2 <- getBPUsageProperties symbolTable
-  return (symbolTable2, graph)
+  let symbolTableRaw = fst result
+  let graph = addOneOfEdges (snd result)
+  symbolTable <- getBPUsageProperties symbolTableRaw
+  return (symbolTable, graph)
 
-semanticAnalysisMain :: AST -> Either String (SymbolTable, ConstraintGraph)
+semanticAnalysisMain :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 semanticAnalysisMain ast@(AST ParameterStatement _ children) = do
   case statementType ast of
     Right Enumeration -> analyzeEnumerationStatement ast
@@ -127,55 +116,8 @@ semanticAnalysisMain ast@(AST ParameterStatement _ children) = do
 semanticAnalysisMain (AST _ _ children) = do
   list <- mapM semanticAnalysisMain children
   let symbolTable = foldl mergeTableParts Map.empty (map fst list)
-  let graph = mergeMultipleGraphs (map snd list)
+  let graph = CG.merge (map snd list)
   return (symbolTable, graph)
-
-merge2Graphs :: ConstraintGraph -> ConstraintGraph -> ConstraintGraph
-merge2Graphs a b = G.run_ b mergeA
-  where
-    nodesOfA = G.labNodes a
-    labelsOfAUnfiltered = map snd nodesOfA
-    edgesOfA = getNodeMapEdges a
-    nodesOfB = G.labNodes b
-    labelsOfB = map snd nodesOfB
-    labelsOfA = filter (`notElem` labelsOfB) labelsOfAUnfiltered
-    mergeA = do
-      G.insMapNodesM labelsOfA
-      G.insMapEdgesM edgesOfA
-
-merge2Graphs' a b =
-  if printSth then trace print result else result
-  where
-    printSth = not (a == G.empty || b == G.empty)
-    result = merge2Graphs a b
-    print = "A:\n" ++
-      G.prettify a ++
-      "B:\n" ++
-      G.prettify b ++
-      "Result:\n" ++
-      G.prettify result
-
-mergeMultipleGraphs :: [ConstraintGraph] -> ConstraintGraph
-mergeMultipleGraphs = foldl merge2Graphs G.empty
-
-mergeMultipleGraphs' :: [G.Gr ConstraintNode Constraint] -> ConstraintGraph
-mergeMultipleGraphs' gs =
-  trace
-    (intercalate "\n" (map G.prettify gs))
-    (mergeMultipleGraphs gs)
-
-getNodeMapEdges :: G.DynGraph g => g a b -> [(a, a, b)]
-getNodeMapEdges g = catMaybes maybeNodeMapEdges
-  where
-    edges = G.labEdges g
-    maybeNodeMapEdges = map (getNodeMapEdge g) edges
-
-
-getNodeMapEdge :: G.DynGraph g => g a b -> G.LEdge b -> Maybe (a, a, b)
-getNodeMapEdge g (a, b, lbl) = do
-  labelA <- G.lab g a
-  labelB <- G.lab g b
-  return (labelA, labelB, lbl)
 
 mergeTableParts :: SymbolTable -> SymbolTable -> SymbolTable
 mergeTableParts t1 t2 =
@@ -201,12 +143,12 @@ statementType (AST ParameterInformation _ children) = statementType $ head child
 statementType _ =
   Left "ParameterStatement does not contain a parameter definition"
 
-symbolTableToTuple :: SymbolTable -> Either String (SymbolTable, ConstraintGraph)
-symbolTableToTuple st = Right (st, G.empty)
+symbolTableToTuple :: SymbolTable -> Either String (SymbolTable, CG.ConstraintGraph)
+symbolTableToTuple st = Right (st, CG.empty)
 
 -- Analyze Enumeration Parameter Statement
 
-analyzeEnumerationStatement :: AST -> Either String (SymbolTable, ConstraintGraph)
+analyzeEnumerationStatement :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 analyzeEnumerationStatement
   ( AST
       ParameterStatement
@@ -230,8 +172,8 @@ analyzeEnumerationStatement
               ],
             buildGraphFromEnumInfo id1 x
           )
-      ("SetsValueArea", y) -> return (Map.singleton id1 y, G.empty) -- TODO G.empty
-      _ -> return (Map.empty, G.empty)
+      ("SetsValueArea", y) -> return (Map.singleton id1 y, CG.empty) -- TODO G.empty
+      _ -> return (Map.empty, CG.empty)
 analyzeEnumerationStatement
   ( AST
       ParameterStatement
@@ -316,25 +258,25 @@ mergeEnumerationValue' (a, b) =
     )
     (mergeEnumerationValue (a, b))
 
-buildGraphFromEnumInfo :: String -> SymbolInformation -> ConstraintGraph
-buildGraphFromEnumInfo id (EnumerationSymbol vs) = G.run_ G.empty buildNodeMap
+buildGraphFromEnumInfo :: String -> SymbolInformation -> CG.ConstraintGraph
+buildGraphFromEnumInfo param (EnumerationSymbol vs) = CG.merge partialGraphs
   where
-    buildNodeMap = do
-      let values = map enumValue vs
-      G.insMapNodesM $ map (ConstraintNode id) values
+    partialGraphs = map enumValueGraph vs
 
-      mapM_ (buildFromEnumValue id) vs
-    buildFromEnumValue id v = do
-      let node = ConstraintNode id (enumValue v)
-      G.insMapNodeM node
-      mapM_ (buildFromRequires node) (rules v)
-    buildFromRequires outNode rule = do
-      let node = case rule of
-            (RequiresValue param value) -> ConstraintNode param value
-            (SetsValueArea param values) -> ConstraintNode param (head values) -- TODO nicht nur head values sondern für alle
-      G.insMapNodeM node
-      G.insMapEdgeM (outNode, node, Exact)
-buildGraphFromEnumInfo _ _ = G.empty
+    enumValueGraph :: EnumerationValue -> CG.ConstraintGraph
+    enumValueGraph ev =
+      CG.node (param, enumValue ev)
+        ##> map (reqRuleGraph $ enumValue ev) (rules ev)
+
+    reqRuleGraph :: String -> RequiresRule -> CG.ConstraintGraph
+    reqRuleGraph srcValue (RequiresValue dstParam dstValue) =
+      CG.edge (param, srcValue) (dstParam, dstValue) CG.Exact
+    reqRuleGraph srcValue (SetsValueArea dstParam dstValues) =
+      CG.merge $
+        map valAreaEdge dstValues
+      where
+        valAreaEdge dstV = CG.edge (param, srcValue) (dstParam, dstV) CG.AllOf
+buildGraphFromEnumInfo _ _ = CG.empty
 
 -- Requires Rule Functions
 
@@ -527,3 +469,20 @@ valuesAndPropertiesToMap properties values =
    in if isValid
         then Right $ foldl folder Map.empty zipped
         else Left $ "Amount of properties and amount of values does not match.\nProperties: " ++ show properties ++ "\nValues: " ++ show values
+
+-- Add One-Of edges to constraint graph
+addOneOfEdges :: CG.ConstraintGraph -> CG.ConstraintGraph
+addOneOfEdges g = CG.gmap perNode g
+  where
+    perNode :: CG.Context -> CG.Context
+    perNode (CG.Context self to from) =
+      let edgesWithoutAllOf = filter (\(_, _, e) -> e /= CG.AllOf) from
+          coveredParams = edgesWithoutAllOf ^.. each . _2 . CG.parameter
+          coveredParams' = nub $ self ^. CG.parameter : coveredParams
+          missingParams = CG.parameters g \\ coveredParams'
+          missingValues = filter (\(CG.Value p _) -> p `elem` missingParams) (CG.nodes g)
+          -- The weird tuple in the following expression is the same as following lambda:
+          -- (\newValue -> (self, newValue, CG.OneOf))
+          -- See tuple sections for further information
+          newEdges = map (self,,CG.OneOf) missingValues
+       in CG.Context self to (from ++ newEdges)

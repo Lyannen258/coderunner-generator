@@ -7,6 +7,7 @@ import Helper
 import Interaction
 import Parser
 import qualified SemanticAnalyzer as SA
+import qualified ConstraintGraph as CG
 import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
@@ -70,7 +71,7 @@ parseResultToString parseResult = case parseResult of
 
 -- Semantic Analysis Functions
 
-writeSemanticResult :: String -> Either String (SA.SymbolTable, SA.ConstraintGraph) -> IO ()
+writeSemanticResult :: String -> Either String (SA.SymbolTable, CG.ConstraintGraph) -> IO ()
 writeSemanticResult filePath result = do
   let output = case result of
         Right (st, cg) -> (SA.showSymbolTable st, prettify cg)
