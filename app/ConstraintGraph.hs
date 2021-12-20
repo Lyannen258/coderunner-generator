@@ -23,9 +23,11 @@ module ConstraintGraph
   )
 where
 
+import Data.List (intercalate)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set (Set, (\\))
 import qualified Data.Set as S
+import Helper
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
 
@@ -34,9 +36,12 @@ data Value = Value
   { _parameter :: String,
     _value :: [String]
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 makeLenses ''Value
+
+instance Show Value where
+  show (Value p v) = p ++ " " ++ intercalate "," v
 
 -- | Data type for an edge in the constraint graph
 type Edge = (Value, Value)
@@ -144,20 +149,39 @@ parameters g = S.map _parameter (values g)
 valuesFor :: String -> ConstraintGraph -> Set Value
 valuesFor param g = S.filter f (values g)
   where
-    f v = (v ^. parameter) == param
+    f v = v ^. parameter == param
 
--- | Gives a list of all valid configurations
-configs :: ConstraintGraph -> [[Value]]
-configs g = [[]]
+-- | Find all cliques of size k in the constraint graph
+--
+-- Cliques are a concept of graph theory.
+--
+-- Algorithm based on https://iq.opengenus.org/algorithm-to-find-cliques-of-a-given-size-k/
+kCliques :: Int -> ConstraintGraph -> Set (Set Value)
+kCliques k g
+  | k < 2 = S.empty
+  | k == 2 = S.map (\(v1, v2) -> S.insert v2 $ S.singleton v1) $ edges g
+  | otherwise = cliques
   where
-    valuesFor' = flip valuesFor
-    valuesByParam = S.map (valuesFor' g) (parameters g)
-    --allConfigs =
+    kminus1 = kCliques (k - 1) g
+    cp = S.cartesianProduct kminus1 kminus1
+    cliques = foldr findCliques S.empty cp
+    findCliques (s1, s2) acc =
+      if isEdgeExists
+        then S.insert u acc
+        else acc
+      where
+        is = S.intersection s1 s2
+        u = S.union s1 s2
+        symDiff = u \\ is -- symmetric difference
+        size_sd = S.size symDiff
+        isTuple = toTuple2 $ S.toList symDiff
+        isEdgeExists = size_sd == 2 && (isTuple `S.member` edges g)
 
-    combine :: [[a]] -> [[a]]
-    combine [] = []
-    combine (x : []) = map (: []) x
-    combine (x1 : x2 : xs) = [[x, y] | x <- x1, y <- x2]
+-- | Finds a set of all valid configurations
+configs :: ConstraintGraph -> Set (Set Value)
+configs g = kCliques k g
+  where
+    k = S.size $ parameters g
 
 -- Specific Adjustements
 ------------------------
@@ -172,7 +196,7 @@ addMissingEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdge
       where
         outEdges = S.filter (\(src, _) -> src == v) (edges g)
         reachableNodes = S.map snd outEdges
-        coveredParams = S.map _parameter reachableNodes
+        coveredParams = S.insert (v ^. parameter) (S.map _parameter reachableNodes)
         missingParams = parameters g \\ coveredParams
         missingValues = S.filter (\(Value p _) -> p `S.member` missingParams) (values g)
         newEdges = S.map (v,) missingValues
