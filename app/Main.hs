@@ -14,6 +14,8 @@ import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtensio
 import System.IO
 import Text.Parsec
 import Data.Graph.Inductive (prettify)
+import Text.Pretty.Simple (pShowNoColor)
+import Data.Text.Lazy (unpack)
 
 main :: IO ()
 main = do
@@ -74,7 +76,7 @@ parseResultToString parseResult = case parseResult of
 writeSemanticResult :: String -> Either String (SA.SymbolTable, CG.ConstraintGraph) -> IO ()
 writeSemanticResult filePath result = do
   let output = case result of
-        Right (st, cg) -> (SA.showSymbolTable st, prettify cg)
+        Right (st, cg) -> (SA.showSymbolTable st, (prettify cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
         Left err -> (err, err)
   writeToFile filePath "/ST.txt" (fst output)
   writeToFile filePath "/CG.txt" (snd output)

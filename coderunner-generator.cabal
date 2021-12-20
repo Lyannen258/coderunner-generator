@@ -51,12 +51,12 @@ executable coderunner-generator
       text,
       transformers,
       directory,
-      strings,
       brick,
       vty,
       microlens,
       microlens-th,
-      fgl
+      fgl,
+      pretty-simple
 
     hs-source-dirs:   app
     default-language: Haskell2010

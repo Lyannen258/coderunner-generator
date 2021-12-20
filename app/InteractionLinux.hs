@@ -91,7 +91,8 @@ data State = State
     _constraintGraph :: G.ConstraintGraph,
     _valueRange :: ValueRange,
     _currentParameter :: String,
-    _debug :: String
+    _debug :: String,
+    _configs :: [[Value]]
   }
 
 makeLenses ''State
@@ -161,7 +162,8 @@ initialState table graph = {- evaluateValueRange -} s
           _constraintGraph = graph,
           _valueRange = M.empty,
           _currentParameter = "",
-          _debug = ""
+          _debug = ""--,
+          --_configs = G.configs graph
         }
 
 getValueAmount :: State -> Int

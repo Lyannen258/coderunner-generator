@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module SemanticAnalyzer where
@@ -100,7 +99,7 @@ semanticAnalysis :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 semanticAnalysis ast = do
   result <- semanticAnalysisMain ast
   let symbolTableRaw = fst result
-  let graph = addOneOfEdges (snd result)
+  let graph = (CG.rmNonReciprocEdges . CG.addOneOfEdges) (snd result)
   symbolTable <- getBPUsageProperties symbolTableRaw
   return (symbolTable, graph)
 
@@ -470,19 +469,3 @@ valuesAndPropertiesToMap properties values =
         then Right $ foldl folder Map.empty zipped
         else Left $ "Amount of properties and amount of values does not match.\nProperties: " ++ show properties ++ "\nValues: " ++ show values
 
--- Add One-Of edges to constraint graph
-addOneOfEdges :: CG.ConstraintGraph -> CG.ConstraintGraph
-addOneOfEdges g = CG.gmap perNode g
-  where
-    perNode :: CG.Context -> CG.Context
-    perNode (CG.Context self to from) =
-      let edgesWithoutAllOf = filter (\(_, _, e) -> e /= CG.AllOf) from
-          coveredParams = edgesWithoutAllOf ^.. each . _2 . CG.parameter
-          coveredParams' = nub $ self ^. CG.parameter : coveredParams
-          missingParams = CG.parameters g \\ coveredParams'
-          missingValues = filter (\(CG.Value p _) -> p `elem` missingParams) (CG.nodes g)
-          -- The weird tuple in the following expression is the same as following lambda:
-          -- (\newValue -> (self, newValue, CG.OneOf))
-          -- See tuple sections for further information
-          newEdges = map (self,,CG.OneOf) missingValues
-       in CG.Context self to (from ++ newEdges)

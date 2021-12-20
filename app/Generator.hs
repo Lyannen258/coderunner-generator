@@ -10,7 +10,6 @@ import SemanticAnalyzer
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
-import Data.Strings (strReplace)
 
 generateOutput :: AST -> SymbolTable -> InteractionResult -> FilePath -> Either String String
 generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt filePath = do

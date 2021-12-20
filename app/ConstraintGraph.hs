@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 module ConstraintGraph
   ( Value (..),
@@ -17,16 +18,20 @@ module ConstraintGraph
     (##>),
     parameters,
     gmap,
-    parameter
+    parameter,
+    configs,
+    addOneOfEdges,
+    rmNonReciprocEdges
   )
 where
 
 import Data.Graph.Inductive (Gr)
 import qualified Data.Graph.Inductive as G
-import Data.List (nub, union)
+import Data.List (nub, union, (\\))
 import Data.Maybe (catMaybes, fromJust)
-import Lens.Micro (each, (^.), (^..))
+import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
+import Data.Tree (Tree)
 
 -- | Data type for a node in the constraint graph
 data Value = Value
@@ -117,7 +122,7 @@ merge2 a b = G.run_ b mergeA
 -- Takes a list of graph and merges them into one.
 -- Drops already contained edges/nodes.
 merge :: [ConstraintGraph] -> ConstraintGraph
-merge l 
+merge l
   | length l >= 2 = foldr1 merge2 l
   | length l == 1 = head l
   | otherwise = empty
@@ -160,12 +165,37 @@ edge v1p v2p e = G.mkGraph [(0, v1), (1, v2)] [(0, 1, e)]
 edge' :: Edge -> ConstraintGraph
 edge' (src, dst, c) = G.mkGraph [(0, src), (1, dst)] [(0, 1, c)]
 
+-- | Node constructor
+--
+-- Same as node but, with Value instead of tuple
+node' :: Value -> ConstraintGraph
+node' (Value p v) = node (p, v)
+
 -- Graph Information
 --------------------
 
 -- | Gives a list of all contained parameters
 parameters :: ConstraintGraph -> [String]
 parameters g = nub (nodes g ^.. each . parameter)
+
+-- | Returns all Values for the given parameter
+valuesFor :: String -> ConstraintGraph -> [Value]
+valuesFor param g = filter f (nodes g)
+  where
+    f v = (v ^. parameter) == param
+
+-- | Gives a list of all valid configurations
+configs :: ConstraintGraph -> [[Value]]
+configs g = [[]]
+  where
+    valuesFor' = flip valuesFor
+    valuesByParam = map (valuesFor' g) (parameters g)
+    --allConfigs = 
+
+    combine :: [[a]] -> [[a]]
+    combine [] = []
+    combine (x:[]) = map (: []) x
+    combine (x1:x2:xs) = [[x,y] | x<-x1, y<-x2]
 
 -- Map
 ------
@@ -181,3 +211,32 @@ gmap f g = merge partialGraphs
     contexts = map (`context` g) ns
     partialContexts = map f contexts
     partialGraphs = map contextToGraph partialContexts
+
+-- Specific Adjustements
+------------------------
+
+-- | Add One-Of edges to constraint graph
+addOneOfEdges :: ConstraintGraph -> ConstraintGraph
+addOneOfEdges g = gmap perNode g
+  where
+    perNode :: Context -> Context
+    perNode (Context self to from) =
+      let edgesWithoutAllOf = filter (\(_, _, e) -> e /= AllOf) from
+          coveredParams = edgesWithoutAllOf ^.. each . _2 . parameter
+          coveredParams' = nub $ self ^. parameter : coveredParams
+          missingParams = parameters g \\ coveredParams'
+          missingValues = filter (\(Value p _) -> p `elem` missingParams) (nodes g)
+          -- The weird tuple in the following expression is the same as following lambda:
+          -- (\newValue -> (self, newValue, OneOf))
+          -- See tuple sections for further information
+          newEdges = map (self,,OneOf) missingValues
+       in Context self to (from ++ newEdges)
+
+-- | Remove non-reciproc edges
+rmNonReciprocEdges :: ConstraintGraph -> ConstraintGraph
+rmNonReciprocEdges g = G.delEdges esToDelete g
+  where
+    es = G.edges g
+    esToDelete = filter (f es) es
+      where
+        f es (v1, v2) = (v2, v1) `notElem` es
