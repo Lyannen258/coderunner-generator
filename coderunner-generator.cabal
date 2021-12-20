@@ -55,7 +55,6 @@ executable coderunner-generator
       vty,
       microlens,
       microlens-th,
-      fgl,
       pretty-simple
 
     hs-source-dirs:   app

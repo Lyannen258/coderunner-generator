@@ -13,7 +13,7 @@ where
 import Brick
 import Brick.Main (defaultMain)
 import Brick.Widgets.Border
-import ConstraintGraph (Constraint, ConstraintGraph, Edge, Value)
+import ConstraintGraph (ConstraintGraph, Edge, Value)
 import qualified ConstraintGraph as G
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -24,7 +24,6 @@ import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
 import qualified Data.Sequence as Seq (fromList, index)
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
-import qualified Helper as H (index)
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH

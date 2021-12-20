@@ -99,7 +99,7 @@ semanticAnalysis :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 semanticAnalysis ast = do
   result <- semanticAnalysisMain ast
   let symbolTableRaw = fst result
-  let graph = (CG.rmNonReciprocEdges . CG.addOneOfEdges) (snd result)
+  let graph = (CG.rmNonReciprocEdges . CG.addMissingEdges) (snd result)
   symbolTable <- getBPUsageProperties symbolTableRaw
   return (symbolTable, graph)
 
@@ -264,17 +264,17 @@ buildGraphFromEnumInfo param (EnumerationSymbol vs) = CG.merge partialGraphs
 
     enumValueGraph :: EnumerationValue -> CG.ConstraintGraph
     enumValueGraph ev =
-      CG.node (param, enumValue ev)
+      CG.node' (param, enumValue ev)
         ##> map (reqRuleGraph $ enumValue ev) (rules ev)
 
     reqRuleGraph :: String -> RequiresRule -> CG.ConstraintGraph
     reqRuleGraph srcValue (RequiresValue dstParam dstValue) =
-      CG.edge (param, srcValue) (dstParam, dstValue) CG.Exact
+      CG.edge' (param, srcValue) (dstParam, dstValue) 
     reqRuleGraph srcValue (SetsValueArea dstParam dstValues) =
       CG.merge $
         map valAreaEdge dstValues
       where
-        valAreaEdge dstV = CG.edge (param, srcValue) (dstParam, dstV) CG.AllOf
+        valAreaEdge dstV = CG.edge' (param, srcValue) (dstParam, dstV)
 buildGraphFromEnumInfo _ _ = CG.empty
 
 -- Requires Rule Functions

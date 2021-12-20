@@ -3,137 +3,81 @@
 
 module ConstraintGraph
   ( Value (..),
-    Constraint (..),
     ConstraintGraph,
     Edge,
-    Context(..),
-    nodes,
+    values,
     edges,
     merge,
-    merge2,
     empty,
     node,
+    node',
     edge,
+    edge',
     (#>),
     (##>),
     parameters,
-    gmap,
     parameter,
     configs,
-    addOneOfEdges,
-    rmNonReciprocEdges
+    addMissingEdges,
+    rmNonReciprocEdges,
   )
 where
 
-import Data.Graph.Inductive (Gr)
-import qualified Data.Graph.Inductive as G
-import Data.List (nub, union, (\\))
 import Data.Maybe (catMaybes, fromJust)
+import Data.Set (Set, (\\))
+import qualified Data.Set as S
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
-import Data.Tree (Tree)
 
 -- | Data type for a node in the constraint graph
 data Value = Value
   { _parameter :: String,
-    _value :: String
+    _value :: [String]
   }
   deriving (Eq, Ord, Show)
 
 makeLenses ''Value
 
 -- | Data type for an edge in the constraint graph
-data Constraint
-  = Exact
-  | OneOf
-  | AllOf
-  deriving (Eq, Ord, Show)
+type Edge = (Value, Value)
 
 -- | The constraint graph
 --
 -- Holds the dependencies between parameter values
-type ConstraintGraph = Gr Value Constraint
-
--- | Overwrites the standard edge.
--- Additionally contains node labels
-type Edge = (Value, Value, Constraint)
-
--- | Context inspired by fgl context
-data Context = Context
-  { _self :: Value,
-    _to :: [Edge],
-    _from :: [Edge]
-  }
-
-context :: Value -> ConstraintGraph -> Context
-context v g = Context v to from
-  where
-    to = filter predTo (edges g)
-    predTo (_, dst, _) = dst == v
-    from = filter predFrom (edges g)
-    predFrom (src, _, _) = src == v
-
-contextToGraph :: Context -> ConstraintGraph
-contextToGraph (Context self to from) =
-  node (self ^. parameter, self ^. value)
-    ##> map edge' to
-    ##> map edge' from
+data ConstraintGraph = ConstraintGraph (Set Value) (Set Edge)
+  deriving (Show)
 
 -- Getters
 ----------
 
--- | Overwrites default.
--- Returns a list of all values in the constraint graph.
-nodes :: ConstraintGraph -> [Value]
-nodes g = map snd (G.labNodes g)
+-- | Returns a set of all values in the constraint graph.
+values :: ConstraintGraph -> Set Value
+values (ConstraintGraph vs _) = vs
 
--- | Overwrites default.
--- Returns a list of all constraints in the constraint graph.
-edges :: ConstraintGraph -> [Edge]
-edges g = catMaybes maybeNodeMapEdges
-  where
-    maybeNodeMapEdges = map (getEdge g) (G.labEdges g)
-
--- | Gets the values (node labels) for the src and dst of an edge.
-getEdge :: ConstraintGraph -> (Int, Int, Constraint) -> Maybe Edge
-getEdge g (a, b, lbl) = do
-  labelA <- G.lab g a
-  labelB <- G.lab g b
-  return (labelA, labelB, lbl)
+-- | Returns a set of all edges in the constraint graph.
+edges :: ConstraintGraph -> Set Edge
+edges (ConstraintGraph _ es) = es
 
 -- Construction
 ---------------
 
--- | Merges two graphs
---
--- Takes two graphs and merges them into one.
--- Drops already contained edges/nodes.
-merge2 :: ConstraintGraph -> ConstraintGraph -> ConstraintGraph
-merge2 a b = G.run_ b mergeA
-  where
-    labelUnion = nub $ nodes a `union` nodes b
-    edgeUnion = nub $ edges a `union` edges b
-    mergeA = do
-      -- using the NodeMap feature of fgl
-      G.insMapNodesM labelUnion
-      G.insMapEdgesM edgeUnion
 -- | Merges multiple graphs
 --
--- Takes a list of graph and merges them into one.
+-- Takes a list of graphs and merges them into one.
 -- Drops already contained edges/nodes.
 merge :: [ConstraintGraph] -> ConstraintGraph
-merge l
-  | length l >= 2 = foldr1 merge2 l
-  | length l == 1 = head l
-  | otherwise = empty
+merge l = ConstraintGraph vs es
+  where
+    vs = S.unions $ map values l
+    es = S.unions $ map edges l
 
 -- | Empty graph
 empty :: ConstraintGraph
-empty = G.empty
+empty = ConstraintGraph S.empty S.empty
 
--- | Operator alias for merge2
+-- | Merge two graphs
 (#>) :: ConstraintGraph -> ConstraintGraph -> ConstraintGraph
-(#>) = merge2
+a #> b = merge [a, b]
 
 infixl 1 #>
 
@@ -145,42 +89,60 @@ infixl 1 ##>
 
 -- | Node constructor
 --
+-- Constructs a constraint graph from a value
+node :: Value -> ConstraintGraph
+node v = ConstraintGraph (S.singleton v) S.empty
+
+-- | Edge constructor
+--
+-- Constructs a constraint graph from an Edge
+edge :: Edge -> ConstraintGraph
+edge (src, dst) = ConstraintGraph vs es
+  where
+    vs = S.fromList [src, dst]
+    es = S.singleton (src, dst)
+
+-- | Node constructor
+--
 -- Takes two strings and constructs a constraint graph.
 -- First string is parameter, second is value.
-node :: (String, String) -> ConstraintGraph
-node (p, v) = G.insNode (0, Value p v) G.empty
+node' :: (String, String) -> ConstraintGraph
+node' (p, v) = node $ Value p [v]
 
 -- | Edge constructor
 --
 -- Constructs a constraint graph containing just an edge.
-edge :: (String, String) -> (String, String) -> Constraint -> ConstraintGraph
-edge v1p v2p e = G.mkGraph [(0, v1), (1, v2)] [(0, 1, e)]
+edge' :: (String, String) -> (String, String) -> ConstraintGraph
+edge' (p1, v1) (p2, v2) = edge (n1, n2)
   where
-    v1 = uncurry Value v1p
-    v2 = uncurry Value v2p
+    n1 = Value p1 [v1]
+    n2 = Value p2 [v2]
 
--- | Edge constructor
---
--- Constructs a graph from an Edge value
-edge' :: Edge -> ConstraintGraph
-edge' (src, dst, c) = G.mkGraph [(0, src), (1, dst)] [(0, 1, c)]
+-- Destruction
+--------------
 
--- | Node constructor
---
--- Same as node but, with Value instead of tuple
-node' :: Value -> ConstraintGraph
-node' (Value p v) = node (p, v)
+removeEdge :: Edge -> ConstraintGraph -> ConstraintGraph
+removeEdge e g = ConstraintGraph vs es
+  where
+    vs = values g
+    es = S.delete e (edges g)
+
+removeEdges :: Set Edge -> ConstraintGraph -> ConstraintGraph
+removeEdges es g = ConstraintGraph vs newEdges
+  where
+    vs = values g
+    newEdges = edges g \\ es
 
 -- Graph Information
 --------------------
 
--- | Gives a list of all contained parameters
-parameters :: ConstraintGraph -> [String]
-parameters g = nub (nodes g ^.. each . parameter)
+-- | Returns a set of all contained parameters
+parameters :: ConstraintGraph -> Set String
+parameters g = S.map _parameter (values g)
 
 -- | Returns all Values for the given parameter
-valuesFor :: String -> ConstraintGraph -> [Value]
-valuesFor param g = filter f (nodes g)
+valuesFor :: String -> ConstraintGraph -> Set Value
+valuesFor param g = S.filter f (values g)
   where
     f v = (v ^. parameter) == param
 
@@ -189,54 +151,37 @@ configs :: ConstraintGraph -> [[Value]]
 configs g = [[]]
   where
     valuesFor' = flip valuesFor
-    valuesByParam = map (valuesFor' g) (parameters g)
-    --allConfigs = 
+    valuesByParam = S.map (valuesFor' g) (parameters g)
+    --allConfigs =
 
     combine :: [[a]] -> [[a]]
     combine [] = []
-    combine (x:[]) = map (: []) x
-    combine (x1:x2:xs) = [[x,y] | x<-x1, y<-x2]
-
--- Map
-------
-
--- | Maps a function over every node in a constraint graph
---
--- The function takes a value as a parameter and returns a new partial
--- constraint graph. The set of resulting constraint graph is then merged.
-gmap :: (Context -> Context) -> ConstraintGraph -> ConstraintGraph
-gmap f g = merge partialGraphs
-  where
-    ns = nodes g
-    contexts = map (`context` g) ns
-    partialContexts = map f contexts
-    partialGraphs = map contextToGraph partialContexts
+    combine (x : []) = map (: []) x
+    combine (x1 : x2 : xs) = [[x, y] | x <- x1, y <- x2]
 
 -- Specific Adjustements
 ------------------------
 
--- | Add One-Of edges to constraint graph
-addOneOfEdges :: ConstraintGraph -> ConstraintGraph
-addOneOfEdges g = gmap perNode g
+addMissingEdges :: ConstraintGraph -> ConstraintGraph
+addMissingEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdges)
   where
-    perNode :: Context -> Context
-    perNode (Context self to from) =
-      let edgesWithoutAllOf = filter (\(_, _, e) -> e /= AllOf) from
-          coveredParams = edgesWithoutAllOf ^.. each . _2 . parameter
-          coveredParams' = nub $ self ^. parameter : coveredParams
-          missingParams = parameters g \\ coveredParams'
-          missingValues = filter (\(Value p _) -> p `elem` missingParams) (nodes g)
-          -- The weird tuple in the following expression is the same as following lambda:
-          -- (\newValue -> (self, newValue, OneOf))
-          -- See tuple sections for further information
-          newEdges = map (self,,OneOf) missingValues
-       in Context self to (from ++ newEdges)
+    additionalEdges = S.unions $ S.map addPerNode (values g)
+
+    addPerNode :: Value -> Set Edge
+    addPerNode v = newEdges
+      where
+        outEdges = S.filter (\(src, _) -> src == v) (edges g)
+        reachableNodes = S.map snd outEdges
+        coveredParams = S.map _parameter reachableNodes
+        missingParams = parameters g \\ coveredParams
+        missingValues = S.filter (\(Value p _) -> p `S.member` missingParams) (values g)
+        newEdges = S.map (v,) missingValues
 
 -- | Remove non-reciproc edges
 rmNonReciprocEdges :: ConstraintGraph -> ConstraintGraph
-rmNonReciprocEdges g = G.delEdges esToDelete g
+rmNonReciprocEdges g = removeEdges esToDelete g
   where
-    es = G.edges g
-    esToDelete = filter (f es) es
+    es = edges g
+    esToDelete = S.filter (f es) es
       where
         f es (v1, v2) = (v2, v1) `notElem` es
