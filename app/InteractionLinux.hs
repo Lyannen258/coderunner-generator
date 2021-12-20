@@ -13,17 +13,23 @@ where
 import Brick
 import Brick.Main (defaultMain)
 import Brick.Widgets.Border
+import qualified ConfigurationState as CS
 import ConstraintGraph (ConstraintGraph, Edge, Value)
 import qualified ConstraintGraph as G
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
+import Data.List (intercalate)
+import Data.List.Split (splitOn)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromJust)
 import Data.Sequence (Seq, empty, fromList, mapWithIndex, (|>))
 import qualified Data.Sequence as Seq (fromList, index)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
+import qualified Helper as H
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
@@ -87,11 +93,11 @@ data State = State
     _ui :: UI,
     _valueTable :: ValueTable,
     _symbolTable :: SymbolTable,
-    _constraintGraph :: G.ConstraintGraph,
     _valueRange :: ValueRange,
     _currentParameter :: String,
     _debug :: String,
-    _configs :: [[Value]]
+    _graph :: G.ConstraintGraph,
+    _configs :: CS.ConfigurationState
   }
 
 makeLenses ''State
@@ -145,7 +151,7 @@ instance Beautify String where
   beautify s = s
 
 initialState :: SymbolTable -> ConstraintGraph -> State
-initialState table graph = {- evaluateValueRange -} s
+initialState table graph = s
   where
     s =
       State
@@ -158,11 +164,11 @@ initialState table graph = {- evaluateValueRange -} s
               },
           _valueTable = M.empty,
           _symbolTable = table,
-          _constraintGraph = graph,
           _valueRange = M.empty,
           _currentParameter = "",
-          _debug = ""--,
-          --_configs = G.configs graph
+          _graph = graph,
+          _debug = "",
+          _configs = CS.init . G.configs $ graph
         }
 
 getValueAmount :: State -> Int
@@ -218,6 +224,7 @@ value2Widget currentIndex valueIndex value
 
 -- Attributes
 
+current :: AttrName
 current = attrName "current"
 
 globalDefault :: Attr
@@ -255,7 +262,7 @@ nextStep :: State -> EventM n (Next State)
 nextStep state
   | state ^. step == ChooseMode = nextStepFromChooseMode state
   | state ^. step == ChooseParameter = chooseValueForParameterStep state
-  | state ^. step == ChooseValueForParameter = (chooseParameterStep {-. evaluateSelection-}) state
+  | state ^. step == ChooseValueForParameter = chooseParameterStep state
   | otherwise = halt state
 
 nextStepFromChooseMode :: State -> EventM n (Next State)
@@ -266,41 +273,28 @@ nextStepFromChooseMode state
 
 chooseParameterStep :: State -> EventM n (Next State)
 chooseParameterStep state =
-  continue $
-    state
-      & set step ChooseParameter
-      & set
-        (ui . values)
-        (buildDataItems (state ^. valueTable) (state ^. symbolTable))
-
-buildDataItems :: ValueTable -> SymbolTable -> Seq UIItem
-buildDataItems vTable sTable =
-  fromList $
-    zipWith
-      UIItem
-      (M.keys (enumerationSymbolsOnly sTable))
-      (visualRepresentations vTable sTable)
-
-visualRepresentations :: ValueTable -> SymbolTable -> [String]
-visualRepresentations vTable sTable =
-  map (visualRepresentation vTable) (M.keys (enumerationSymbolsOnly sTable))
-
-visualRepresentation :: ValueTable -> String -> String
-visualRepresentation vTable s =
-  case M.lookup s vTable of
-    Nothing -> s
-    Just a -> s ++ " = " ++ show a
-
-
-
--- | Takes a symbol table and returns a symbol table
--- where everything except EnumerationSymbols is removed
-enumerationSymbolsOnly :: SymbolTable -> SymbolTable
-enumerationSymbolsOnly = M.filter f
+  continue state'''
   where
-    f v = case v of
-      EnumerationSymbol _ -> True
-      _ -> False
+    state' = state & set step ChooseParameter
+    currentValue = splitOn "," $ currentItemIdentifier state
+    state'' =
+      if state ^. currentParameter /= ""
+        then state' 
+          & over configs (CS.set (state ^. currentParameter) currentValue)
+          & over valueTable (M.insert (state ^. currentParameter) currentValue )
+        else state'
+    parameters = (fromList . S.toList . G.parameters) (state ^. graph)
+    parametersUI = fmap f parameters
+      where
+        f p = UIItem p vis
+          where
+            isSet = p `M.member` (state'' ^. valueTable)
+            value = (state'' ^. valueTable) M.! p
+            valueVis = intercalate "," value
+            vis = if isSet
+              then p ++ " (" ++ valueVis ++ ")"
+              else p
+    state''' = state'' & set (ui . values) parametersUI
 
 chooseValueForParameterStep :: State -> EventM n (Next State)
 chooseValueForParameterStep state =
@@ -309,10 +303,12 @@ chooseValueForParameterStep state =
       & set currentParameter p
       & set step ChooseValueForParameter
       & set (ui . values) uiValuesSeq
+      & set debug (show valRangeForP)
   where
     p = currentItemIdentifier state
-    valRangeForP = (state ^. valueRange) M.! p
-    uiValues = map (\s -> UIItem s s) valRangeForP
+    valRangeForP = CS.for p (state ^. configs)
+    valRangeForP' = map (intercalate ",") valRangeForP
+    uiValues = map (\s -> UIItem s s) valRangeForP'
     uiValuesSeq = Seq.fromList uiValues
 
 -- Interface

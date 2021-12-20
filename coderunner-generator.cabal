@@ -31,7 +31,8 @@ executable coderunner-generator
       Interaction,
       Generator,
       Helper,
-      ConstraintGraph
+      ConstraintGraph,
+      ConfigurationState
 
     if os(windows)
       other-modules: InteractionWindows
@@ -55,7 +56,8 @@ executable coderunner-generator
       vty,
       microlens,
       microlens-th,
-      pretty-simple
+      pretty-simple,
+      split
 
     hs-source-dirs:   app
     default-language: Haskell2010
