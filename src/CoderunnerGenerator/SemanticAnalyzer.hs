@@ -99,7 +99,7 @@ semanticAnalysis :: AST -> Either String (SymbolTable, CG.ConstraintGraph)
 semanticAnalysis ast = do
   result <- semanticAnalysisMain ast
   let symbolTableRaw = fst result
-  let graph = (CG.rmNonReciprocEdges . CG.addMissingEdges) (snd result)
+  let graph = (CG.rmNonReciprocEdges . CG.addImplicitEdges) (snd result)
   symbolTable <- getBPUsageProperties symbolTableRaw
   return (symbolTable, graph)
 

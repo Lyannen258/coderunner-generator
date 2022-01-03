@@ -2,11 +2,15 @@
 {-# LANGUAGE TupleSections #-}
 
 module CoderunnerGenerator.Types.ConstraintGraph
-  ( Value (..),
+  ( -- * Types
+    Value (..),
     ConstraintGraph,
     Edge,
+    parameter,
+    -- * Getters
     values,
     edges,
+    -- * Construction
     merge,
     empty,
     node,
@@ -15,10 +19,11 @@ module CoderunnerGenerator.Types.ConstraintGraph
     edge',
     (#>),
     (##>),
+    -- * Graph Information
     parameters,
-    parameter,
     configs,
-    addMissingEdges,
+    -- * Specific Modifications
+    addImplicitEdges,
     rmNonReciprocEdges,
   )
 where
@@ -183,11 +188,17 @@ configs g = kCliques k g
   where
     k = S.size $ parameters g
 
--- Specific Adjustements
+-- Specific Modifications
 ------------------------
 
-addMissingEdges :: ConstraintGraph -> ConstraintGraph
-addMissingEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdges)
+-- | Adds all edges, that are not explicit in the template file
+--
+-- Every value (#1) in the constraint graph is linked to every other value (#2) unless:
+--  * the values belong to the same parameter
+--  * #1 is already connected to one or more values that belong to the same parameter
+-- as #2
+addImplicitEdges :: ConstraintGraph -> ConstraintGraph
+addImplicitEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdges)
   where
     additionalEdges = S.unions $ S.map addPerNode (values g)
 
