@@ -2,3 +2,6 @@ dist-newstyle/
 
 example-files/*
 !example-files/*.txt
+
+.stack-work
+stack.yaml.lock

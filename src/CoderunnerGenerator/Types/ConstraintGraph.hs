@@ -2,15 +2,12 @@
 {-# LANGUAGE TupleSections #-}
 
 module CoderunnerGenerator.Types.ConstraintGraph
-  ( -- * Types
-    Value (..),
+  ( Value (..),
     ConstraintGraph,
     Edge,
     parameter,
-    -- * Getters
     values,
     edges,
-    -- * Construction
     merge,
     empty,
     node,
@@ -19,10 +16,8 @@ module CoderunnerGenerator.Types.ConstraintGraph
     edge',
     (#>),
     (##>),
-    -- * Graph Information
     parameters,
     configs,
-    -- * Specific Modifications
     addImplicitEdges,
     rmNonReciprocEdges,
   )
@@ -35,6 +30,9 @@ import qualified Data.Set as S
 import CoderunnerGenerator.Helper
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
+
+-- * Types and Lenses
+---------------------
 
 -- | Data type for a node in the constraint graph
 data Value = Value
@@ -57,7 +55,7 @@ type Edge = (Value, Value)
 data ConstraintGraph = ConstraintGraph (Set Value) (Set Edge)
   deriving (Show)
 
--- Getters
+-- * Getters
 ----------
 
 -- | Returns a set of all values in the constraint graph.
@@ -68,7 +66,7 @@ values (ConstraintGraph vs _) = vs
 edges :: ConstraintGraph -> Set Edge
 edges (ConstraintGraph _ es) = es
 
--- Construction
+-- * Construction
 ---------------
 
 -- | Merges multiple graphs
@@ -128,7 +126,7 @@ edge' (p1, v1) (p2, v2) = edge (n1, n2)
     n1 = Value p1 [v1]
     n2 = Value p2 [v2]
 
--- Destruction
+-- * Destruction
 --------------
 
 removeEdge :: Edge -> ConstraintGraph -> ConstraintGraph
@@ -143,7 +141,7 @@ removeEdges es g = ConstraintGraph vs newEdges
     vs = values g
     newEdges = edges g \\ es
 
--- Graph Information
+-- * Graph Information
 --------------------
 
 -- | Returns a set of all contained parameters
@@ -188,12 +186,13 @@ configs g = kCliques k g
   where
     k = S.size $ parameters g
 
--- Specific Modifications
+-- * Specific Modifications
 ------------------------
 
 -- | Adds all edges, that are not explicit in the template file
 --
 -- Every value (#1) in the constraint graph is linked to every other value (#2) unless:
+--
 --  * the values belong to the same parameter
 --  * #1 is already connected to one or more values that belong to the same parameter
 -- as #2
@@ -213,6 +212,8 @@ addImplicitEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdg
         newEdges = S.map (v,) missingValues
 
 -- | Remove non-reciproc edges
+--
+-- If there is an edge a->b but not an edge b->a, remove it
 rmNonReciprocEdges :: ConstraintGraph -> ConstraintGraph
 rmNonReciprocEdges g = removeEdges esToDelete g
   where
