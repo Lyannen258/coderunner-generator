@@ -1,4 +1,4 @@
-module Parser where
+module CoderunnerGenerator.Parser where
 
 import Data.Tree (Tree (Node), drawTree)
 import GHC.Show (Show)

@@ -21,45 +21,65 @@ maintainer:         eriksson@wifa.uni-leipzig.de
 -- category:
 --extra-source-files: CHANGELOG.md
 
+library
+  exposed-modules:
+      CoderunnerGenerator.Parser,
+      CoderunnerGenerator.SemanticAnalyzer,
+      CoderunnerGenerator.Interaction,
+      CoderunnerGenerator.Generator,
+      CoderunnerGenerator.Helper,
+      CoderunnerGenerator.Types.ConstraintGraph,
+      CoderunnerGenerator.Types.ConfigurationState
+
+  if os(windows)
+    other-modules: CoderunnerGenerator.Interaction.Windows
+    cpp-options: -Dwindows
+  else
+    other-modules: CoderunnerGenerator.Interaction.Linux
+    cpp-options: -Dlinux
+
+  build-depends:
+    base >= 4,
+    parsec >= 3.1.2,
+    xml,
+    containers,
+    filepath,
+    text,
+    transformers,
+    directory,
+    brick,
+    vty,
+    microlens,
+    microlens-th,
+    pretty-simple,
+    split
+
+  hs-source-dirs: src
+  default-language: Haskell2010
+  default-extensions: CPP
+
 executable coderunner-generator
-    main-is:          Main.hs
-
-    -- Modules included in this executable, other than Main.
-    other-modules:
-      Parser,
-      SemanticAnalyzer,
-      Interaction,
-      Generator,
-      Helper,
-      ConstraintGraph,
-      ConfigurationState
-
-    if os(windows)
-      other-modules: InteractionWindows
-      cpp-options: -DWindows
-    else
-      other-modules: InteractionLinux
-      cpp-options: -DLinux
+  main-is:          Main.hs
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:
-      base >= 4,
-      parsec >= 3.1.2,
-      xml,
-      containers,
-      filepath,
-      text,
-      transformers,
-      directory,
-      brick,
-      vty,
-      microlens,
-      microlens-th,
-      pretty-simple,
-      split
+  build-depends:
+    base >= 4,
+    parsec >= 3.1.2,
+    xml,
+    containers,
+    filepath,
+    text,
+    transformers,
+    directory,
+    brick,
+    vty,
+    microlens,
+    microlens-th,
+    pretty-simple,
+    split,
+    coderunner-generator
 
-    hs-source-dirs:   app
-    default-language: Haskell2010
-    default-extensions: CPP
-    ghc-options: -threaded
+  hs-source-dirs:   app
+  default-language: Haskell2010
+  ghc-options: -threaded

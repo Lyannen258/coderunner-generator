@@ -1,12 +1,12 @@
-module Generator where
+module CoderunnerGenerator.Generator where
 
 import Control.Monad (foldM)
 import Data.List (intercalate)
 import qualified Data.Map as M
-import Helper
-import Interaction
-import Parser
-import SemanticAnalyzer
+import CoderunnerGenerator.Helper
+import CoderunnerGenerator.Interaction
+import CoderunnerGenerator.Parser as Parser
+import CoderunnerGenerator.SemanticAnalyzer
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light

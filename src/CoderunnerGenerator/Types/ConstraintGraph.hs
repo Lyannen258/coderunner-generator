@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module ConstraintGraph
+module CoderunnerGenerator.Types.ConstraintGraph
   ( Value (..),
     ConstraintGraph,
     Edge,
@@ -27,7 +27,7 @@ import Data.List (intercalate)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set (Set, (\\))
 import qualified Data.Set as S
-import Helper
+import CoderunnerGenerator.Helper
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
 

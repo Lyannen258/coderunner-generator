@@ -1,4 +1,4 @@
-module Helper where
+module CoderunnerGenerator.Helper where
 
 import qualified Data.List as L (find)
 import Debug.Pretty.Simple

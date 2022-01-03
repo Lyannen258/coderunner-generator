@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module InteractionLinux
+module CoderunnerGenerator.Interaction.Linux
   ( InteractionResult,
     getIrSingleValue,
     getIrValues,
@@ -13,9 +13,9 @@ where
 import Brick
 import Brick.Main (defaultMain)
 import Brick.Widgets.Border
-import qualified ConfigurationState as CS
-import ConstraintGraph (ConstraintGraph, Edge, Value)
-import qualified ConstraintGraph as G
+import qualified CoderunnerGenerator.Types.ConfigurationState as CS
+import CoderunnerGenerator.Types.ConstraintGraph (ConstraintGraph, Edge, Value)
+import qualified CoderunnerGenerator.Types.ConstraintGraph as G
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
@@ -29,11 +29,11 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
-import qualified Helper as H
+import qualified CoderunnerGenerator.Helper as H
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import SemanticAnalyzer (SymbolInformation (EnumerationSymbol), SymbolTable)
+import CoderunnerGenerator.SemanticAnalyzer (SymbolInformation (EnumerationSymbol), SymbolTable)
 
 -- Internal stuff to make each work with sequence
 

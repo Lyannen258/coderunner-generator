@@ -1,13 +1,13 @@
-module InteractionWindows where
+module CoderunnerGenerator.Interaction.Windows where
 
 import Control.Monad (foldM, join)
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import GHC.Show (Show)
-import Helper
-import Parser
-import SemanticAnalyzer
+import CoderunnerGenerator.Helper
+import CoderunnerGenerator.Parser
+import CoderunnerGenerator.SemanticAnalyzer
 import Text.Read (readMaybe)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Class

@@ -1,8 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module ConfigurationState where
+module CoderunnerGenerator.Types.ConfigurationState where
 
-import ConstraintGraph (Value (Value), _value)
+import CoderunnerGenerator.Types.ConstraintGraph (Value (Value), _value)
 import Data.List (intercalate)
 import Data.Set (Set)
 import qualified Data.Set as S

@@ -2,12 +2,12 @@ module Main where
 
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Tree (drawTree)
-import Generator
-import Helper
-import Interaction
-import Parser
-import qualified SemanticAnalyzer as SA
-import qualified ConstraintGraph as CG
+import CoderunnerGenerator.Generator
+import CoderunnerGenerator.Helper
+import CoderunnerGenerator.Interaction
+import CoderunnerGenerator.Parser
+import qualified CoderunnerGenerator.SemanticAnalyzer as SA
+import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
 import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))

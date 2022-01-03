@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
-module SemanticAnalyzer where
+module CoderunnerGenerator.SemanticAnalyzer where
 
 import Brick (getContext)
-import ConstraintGraph ((##>), (#>))
-import qualified ConstraintGraph as CG
+import CoderunnerGenerator.Types.ConstraintGraph ((##>), (#>))
+import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
 import Control.Monad (join)
 import Data.List
 import qualified Data.Map as Map
@@ -15,7 +15,7 @@ import Data.Tree (drawTree)
 import Debug.Trace
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
-import Parser
+import CoderunnerGenerator.Parser
   ( AST (AST, children, label),
     Label
       ( Blueprint,
@@ -30,7 +30,7 @@ import Parser
         Value
       ),
   )
-import qualified Parser as P
+import qualified CoderunnerGenerator.Parser as P
 
 -- Problem: siehe $INPUT im ersten Beispiel. Da brauchen wir eine Liste.
 -- Das wird aber schwierig, wenn mehrere Parameter Listen sind, eine konsistente
