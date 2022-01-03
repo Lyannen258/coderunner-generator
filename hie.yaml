@@ -1,3 +1,7 @@
 cradle:
   cabal:
-    component: "coderunner-generator:exe:coderunner-generator"
+    - path: "src"
+      component: "lib:coderunner-generator"
+
+    - path: "app/Main.hs"
+      component: "coderunner-generator:exe:coderunner-generator"
