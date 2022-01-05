@@ -1,19 +1,38 @@
+-- |
+-- Module      : CoderunnerGenerator.Parser
+-- Description : Contains parsers to analyze a template file and form an abstract syntax tree
+--
+-- Contains parsers to analyze a template file and form an abstract syntax tree
+--
+-- The main parser is @coderunnerParser@. It is made up of section specific parsers, which
+-- in turn are constructed by using even more granular parsers.
+--
+-- The parsers are loosely correlated with the rules in /grammar.ebnf/.
 module CoderunnerGenerator.Parser where
 
 import Data.Tree (Tree (Node), drawTree)
 import GHC.Show (Show)
 import Text.Parsec
-import Text.Parsec.Token (GenLanguageDef (caseSensitive))
 
+-- * Types
+
+-- | Recursive data type for the abstract syntax tree
 data AST = AST
-  { label :: Label,
+  { -- | The node label
+    label :: Label,
+    -- | The node value
+    --
+    -- It is the corresponding string in the template code.
+    -- Only leaf nodes have values.
     value :: String,
+    -- | Child nodes of the node
     children :: [AST]
   }
 
 instance Show AST where
   show ast = drawTree $ toDataTree ast
 
+-- | All possible node labels for the AST
 data Label
   = CoderunnerFile
   | ParameterSection
@@ -48,9 +67,13 @@ data Label
   | Constant
   deriving (Show, Eq)
 
+-- | Convert an AST to the Data.Tree type
 toDataTree :: AST -> Tree String
 toDataTree (AST label value children) = Node (show label ++ " (\"" ++ value ++ "\")") (map toDataTree children)
 
+-- * Parsers
+
+-- | The main parser for a template file
 coderunnerParser :: Parsec String () AST
 coderunnerParser = do
   parameterSection <- parameterSectionParser
@@ -70,8 +93,9 @@ coderunnerParser = do
         ]
     )
 
--- Parameter Section Parsers
+-- ** Parameter Section
 
+-- | Parser for the parameter section of a template
 parameterSectionParser :: Parsec String () AST
 parameterSectionParser = do
   headline <- string "Parameter:"
@@ -246,7 +270,7 @@ blueprintUsageParser = do
         enumeration
       ]
 
--- Parameter Usage Parsers
+-- ** Parameter Usage
 
 parameterUsageParser :: Parsec String () AST
 parameterUsageParser = do
@@ -288,7 +312,7 @@ functionCallPartParser = do
   string ")"
   return $ AST FunctionCallPart "" ([AST Argument argument [] | not (null argument)])
 
--- Other Section Parsers
+-- ** Other Sections
 
 taskSectionParser :: Parsec String () AST
 taskSectionParser = do
@@ -376,8 +400,6 @@ anyHeadline = do
     <|> try (string "Tests:")
     <|> string "Parameter:"
 
--- Test Section Parsers
-
 testSectionParser :: Parsec String () AST
 testSectionParser = do
   many linebreak
@@ -401,7 +423,7 @@ testCaseParser = do
     AST
       TestCase
       ""
-      [ AST TestCode (value caseBody) (children caseBody), -- Body zu TestCode umbenennen
+      [ AST TestCode (value caseBody) (children caseBody),
         outcome
       ]
 
@@ -415,7 +437,7 @@ testOutcomeParser = do
   optional $ many linebreak
   return $ AST TestOutcome outcome []
 
--- Character Parsers
+-- ** Characters
 
 valueCharacterParser :: Parsec String () Char
 valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
