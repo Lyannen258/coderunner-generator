@@ -6,7 +6,9 @@ import CoderunnerGenerator.Generator
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Interaction
 import CoderunnerGenerator.Parser
+import CoderunnerGenerator.Types.AbstractSyntaxTree
 import qualified CoderunnerGenerator.SemanticAnalyzer as SA
+import qualified CoderunnerGenerator.Types.SymbolTable as ST
 import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
 import System.Directory
 import System.Environment (getArgs)
@@ -72,10 +74,10 @@ parseResultToString parseResult = case parseResult of
 
 -- Semantic Analysis Functions
 
-writeSemanticResult :: String -> Either String (SA.SymbolTable, CG.ConstraintGraph) -> IO ()
+writeSemanticResult :: String -> Either String (ST.SymbolTable, CG.ConstraintGraph) -> IO ()
 writeSemanticResult filePath result = do
   let output = case result of
-        Right (st, cg) -> (SA.showSymbolTable st, unpack (pShowNoColor cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
+        Right (st, cg) -> (ST.showTable st, unpack (pShowNoColor cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
         Left err -> (err, err)
   writeToFile filePath "/ST.txt" (fst output)
   writeToFile filePath "/CG.txt" (snd output)

@@ -29,7 +29,9 @@ library
       CoderunnerGenerator.Generator,
       CoderunnerGenerator.Helper,
       CoderunnerGenerator.Types.ConstraintGraph,
-      CoderunnerGenerator.Types.ConfigurationState
+      CoderunnerGenerator.Types.ConfigurationState,
+      CoderunnerGenerator.Types.AbstractSyntaxTree,
+      CoderunnerGenerator.Types.SymbolTable
 
   if os(windows)
     other-modules: CoderunnerGenerator.Interaction.Windows

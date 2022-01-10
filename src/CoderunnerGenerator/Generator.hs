@@ -5,8 +5,8 @@ import Data.List (intercalate)
 import qualified Data.Map as M
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Interaction
-import CoderunnerGenerator.Parser as Parser
-import CoderunnerGenerator.SemanticAnalyzer
+import CoderunnerGenerator.Types.AbstractSyntaxTree
+import CoderunnerGenerator.Types.SymbolTable as ST
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
@@ -99,7 +99,7 @@ analyzeIdAndProp :: [AST] -> SymbolTable -> InteractionResult -> Either String S
 analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop []] st vt = do
   symbolEntry <- maybeToEither (M.lookup id st) ("No symbol found for identifier: '" ++ id ++ "'")
   case symbolEntry of
-    BlueprintUsageSymbol s m -> getPropertyValue m
+    BlueprintUsageSymbol (ST.BlueprintUsage b vs) -> getPropertyValue vs
     x -> Left "PropertyPart can only be used with blueprint-identifiers"
   where
     getPropertyValue m = do
@@ -112,7 +112,7 @@ analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop [AST FunctionCallPa
   let args =
         if null optArg
           then ""
-          else Parser.value (head optArg)
+          else value (head optArg)
   applyFunctionCall prop args values
   where
     applyFunctionCall "ALL" _ values =

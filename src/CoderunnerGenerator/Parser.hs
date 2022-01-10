@@ -10,68 +10,10 @@
 -- The parsers are loosely correlated with the rules in /grammar.ebnf/.
 module CoderunnerGenerator.Parser where
 
-import Data.Tree (Tree (Node), drawTree)
-import GHC.Show (Show)
+import CoderunnerGenerator.Types.AbstractSyntaxTree
 import Text.Parsec
 
--- * Types
-
--- | Recursive data type for the abstract syntax tree
-data AST = AST
-  { -- | The node label
-    label :: Label,
-    -- | The node value
-    --
-    -- It is the corresponding string in the template code.
-    -- Only leaf nodes have values.
-    value :: String,
-    -- | Child nodes of the node
-    children :: [AST]
-  }
-
-instance Show AST where
-  show ast = drawTree $ toDataTree ast
-
--- | All possible node labels for the AST
-data Label
-  = CoderunnerFile
-  | ParameterSection
-  | ParameterHeadline
-  | ParameterBody
-  | ParameterStatement
-  | Requires
-  | ParameterDefinition
-  | ParameterInformation
-  | Enumeration
-  | Value
-  | Generation
-  | ArbitraryPart
-  | Blueprint
-  | Property
-  | Ellipse
-  | BlueprintUsage
-  | ParameterUsage
-  | Identifier
-  | PropertyPart
-  | FunctionCallPart
-  | Argument
-  | TaskSection
-  | SolutionSection
-  | PreAllocationSection
-  | Body
-  | TestSection
-  | TestOutcome
-  | TestBody
-  | TestCode
-  | TestCase
-  | Constant
-  deriving (Show, Eq)
-
--- | Convert an AST to the Data.Tree type
-toDataTree :: AST -> Tree String
-toDataTree (AST label value children) = Node (show label ++ " (\"" ++ value ++ "\")") (map toDataTree children)
-
--- * Parsers
+-- * Main Parser
 
 -- | The main parser for a template file
 coderunnerParser :: Parsec String () AST

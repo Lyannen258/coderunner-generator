@@ -33,7 +33,7 @@ import qualified CoderunnerGenerator.Helper as H
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import CoderunnerGenerator.SemanticAnalyzer (SymbolInformation (EnumerationSymbol), SymbolTable)
+import CoderunnerGenerator.Types.SymbolTable (SymbolInformation (EnumerationSymbol), SymbolTable)
 
 -- Internal stuff to make each work with sequence
 
