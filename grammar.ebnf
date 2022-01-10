@@ -1,4 +1,4 @@
-CoderunnerFile = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection;
+Template = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection; (* Every order is valid as long as all of the listed sections are present *)
 
 
 (* Parameter Section Definitions *)
