@@ -44,12 +44,18 @@ data ParameterStatement
       ParameterDefinition
       (Maybe ParameterDefinition)
 
+instance Pos ParameterStatement where
+  position (ParameterStatement p _ _) = p
+
 -- | Represents a parameter definition
 data ParameterDefinition
   = ParameterDefinition
       Position
       Identifier
       ParameterInformation
+
+instance Pos ParameterDefinition where
+  position (ParameterDefinition p _ _) = p
 
 -- | Represents one of the 4 types of parameter information
 data ParameterInformation
@@ -61,12 +67,18 @@ data ParameterInformation
 -- | Represents an enumeration parameter information
 data Enumeration = Enumeration Position [String]
 
+instance Pos Enumeration where
+  position (Enumeration p _) = p
+
 -- | Represents a generation parameter information
 data Generation
   = -- | Identifiers of the Generator
     Generation
       Position
       [Identifier]
+
+instance Pos Generation where
+  position (Generation p _) = p
 
 -- | Represents a blueprint parameter information
 data Blueprint
@@ -76,6 +88,9 @@ data Blueprint
       -- ^ Properties of the blueprint
       Bool
       -- ^ Has ellipse?
+
+instance Pos Blueprint where
+  position (Blueprint p _ _) = p
 
 -- | Represents a property of a blueprint. Just an alias for @String@.
 type Property = String
@@ -89,6 +104,9 @@ data BlueprintUsage
       [String]
       -- ^ List of values for the blueprint properties
 
+instance Pos BlueprintUsage where
+  position (BlueprintUsage p _ _) = p
+
 -- | Represents an identifier. Just an alias for @String@.
 type Identifier = String
 
@@ -100,6 +118,9 @@ data ParameterUsage
       Position
       Identifier
       (Maybe PropertyPart)
+
+instance Pos ParameterUsage where
+  position (ParameterUsage p _ _) = p
 
 -- | Represents the usage of a blueprint property in a parameter usage
 data PropertyPart
@@ -122,40 +143,55 @@ data BodyPart
   | ConstantPart String
 
 -- | Represents the task section
-data TaskSection =
-  TaskSection
-    Position
-    Body
+data TaskSection
+  = TaskSection
+      Position
+      Body
+
+instance Pos TaskSection where
+  position (TaskSection p _) = p
 
 -- | Represents the solution section
-data SolutionSection = 
-  SolutionSection
-    Position
-    Body
+data SolutionSection
+  = SolutionSection
+      Position
+      Body
+
+instance Pos SolutionSection where
+  position (SolutionSection p _) = p
 
 -- | Represents the pre allocation section
-data PreAllocationSection = 
-  PreAllocationSection
-    Position
-    Body
+data PreAllocationSection
+  = PreAllocationSection
+      Position
+      Body
+
+instance Pos PreAllocationSection where
+  position (PreAllocationSection p _) = p
 
 -- | Represents the test section
-data TestSection = 
-  TestSection 
-    Position
-    [TestCase]
+data TestSection
+  = TestSection
+      Position
+      [TestCase]
+
+instance Pos TestSection where
+  position (TestSection p _) = p
 
 -- | Represents a test case in the test section
-data TestCase = 
-  TestCase
-    Position
-    TestCode
-    TestOutcome
+data TestCase
+  = TestCase
+      Position
+      TestCode
+      TestOutcome
+
+instance Pos TestCase where
+  position (TestCase p _ _) = p
 
 -- | Represents the test code of a test case
 type TestCode = Body
 
 -- | Represents the expected test outcome
-data TestOutcome =
-  ConstantOutcome String |
-  ParameterOutcome ParameterUsage
+data TestOutcome
+  = ConstantOutcome String
+  | ParameterOutcome ParameterUsage
