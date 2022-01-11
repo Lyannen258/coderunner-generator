@@ -16,9 +16,7 @@ Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
 ValuesWithComma = ValueWithComma, {";", ValueWithComma}; (* and with spaces *)
 ValueWithComma = OPT_WS, "{", ANY, "}", OPT_WS;
 
-Generation = Generator | ( "{", GeneratorWithComma, "}" );
-Generator = {ANY_WO_COMMA}, Identifier, {ANY_WO_COMMA}, {Identifier, {ANY_WO_COMMA}};
-GeneratorWithComma = {ANY}, Identifier, {ANY}, {Identifier, {ANY}};
+Generation = "{", Mixed, "}" );
 
 Blueprint = OPT_WS ,Property, OPT_WS, {",", OPT_WS, Property, OPT_WS}, {",", OPT_WS, Ellipse, OPT_WS};
 Property = "@", CAP_WORD;
@@ -38,18 +36,18 @@ Argument = ANY_WO_COMMA;
 
 (* Other Section Definitions *)
 
-TaskSection = "Aufgabenstellung:", NEWLINE, Body, NEWLINE;
-SolutionSection = "Lösung:", NEWLINE, Body, NEWLINE;
-PreAllocationSection = "Vorbelegung:", NEWLINE, Body, NEWLINE;
+TaskSection = "Aufgabenstellung:", NEWLINE, Mixed, NEWLINE;
+SolutionSection = "Lösung:", NEWLINE, Mixed, NEWLINE;
+PreAllocationSection = "Vorbelegung:", NEWLINE, Mixed, NEWLINE;
 
-Body = (Constant, {ParameterUsage, [Constant]})
-    | (ParameterUsage, {Constant [ParameterUsage]});
+Mixed = (Constant, {ParameterUsage, [Constant]})
+    | (ParameterUsage, {Constant [ParameterUsage]}); (* Mixed content of Constants and ParameterUsage *)
 Constant = ANY; (* nicht ganz korrekt, geschweifte Klammern möglich *)
 
 TestSection = "Test:", NEWLINE, TestBody, NEWLINE;
 TestBody = {TestCase};
 TestCase = TestCode, TestOutcome;
-TestCode = Body;
+TestCode = Mixed;
 TestOutcome = NEWLINE, "Expected Outcome:", OPT_WS, ({CHAR | DIGIT | SPECIAL} | ParameterUsage), OPT_WS;
 
 

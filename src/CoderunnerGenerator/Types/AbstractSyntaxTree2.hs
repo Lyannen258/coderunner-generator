@@ -79,10 +79,10 @@ instance Pos Enumeration where
 
 -- | Represents a generation parameter information
 data Generation
-  = -- | Identifiers of the Generator
+  = -- | Identifiers of the generation
     Generation
       Position
-      [Identifier]
+      Mixed
 
 instance Pos Generation where
   position (Generation p _) = p
@@ -141,11 +141,11 @@ type FunctionCallPart = [String]
 
 -- ** Other Section Definitions
 
--- | Represents a body for the task, solution and pre-allocation section.
-type Body = [BodyPart]
+-- | Represents a mixture of constants and parameter usages
+type Mixed = [MixedPart]
 
--- | Represents a part for the section body. It can only be a constant text part or a parameter usage
-data BodyPart
+-- | Represents a part of 'Mixed', either a constant or a parameter usage
+data MixedPart
   = ParameterPart ParameterUsage
   | ConstantPart String
 
@@ -153,7 +153,7 @@ data BodyPart
 data TaskSection
   = TaskSection
       Position
-      Body
+      Mixed
 
 instance Pos TaskSection where
   position (TaskSection p _) = p
@@ -162,7 +162,7 @@ instance Pos TaskSection where
 data SolutionSection
   = SolutionSection
       Position
-      Body
+      Mixed
 
 instance Pos SolutionSection where
   position (SolutionSection p _) = p
@@ -171,7 +171,7 @@ instance Pos SolutionSection where
 data PreAllocationSection
   = PreAllocationSection
       Position
-      Body
+      Mixed
 
 instance Pos PreAllocationSection where
   position (PreAllocationSection p _) = p
@@ -180,10 +180,13 @@ instance Pos PreAllocationSection where
 data TestSection
   = TestSection
       Position
-      [TestCase]
+      TestBody
 
 instance Pos TestSection where
   position (TestSection p _) = p
+
+-- Represents the test section body
+type TestBody = [TestCase]
 
 -- | Represents a test case in the test section
 data TestCase
@@ -196,7 +199,7 @@ instance Pos TestCase where
   position (TestCase p _ _) = p
 
 -- | Represents the test code of a test case
-type TestCode = Body
+type TestCode = Mixed
 
 -- | Represents the expected test outcome
 data TestOutcome
