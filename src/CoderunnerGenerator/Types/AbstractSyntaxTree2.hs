@@ -1,3 +1,10 @@
+-- |
+-- Module      : CoderunnerGenerator.Types.AbstractSyntaxTree2
+-- Description : Contains the components that represent an abstract syntax tree.
+--
+-- Contains the components that represent an abstract syntax tree. They are correlated to the rules in grammar.ebnf
+--
+-- The root node is 'Template'.
 module CoderunnerGenerator.Types.AbstractSyntaxTree2 where
 
 -- * Pos type class and type
