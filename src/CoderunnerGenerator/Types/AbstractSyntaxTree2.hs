@@ -45,74 +45,72 @@ data ParameterBody = ParameterBody Position [ParameterStatement]
 
 -- | Represents a parameter statement
 data ParameterStatement
-  = -- | optional requires relation
-    ParameterStatement
+  = EnumerationStatement Enumeration
+  | GenerationStatement Generation
+  | BlueprintStatement Blueprint
+  | BlueprintUsageStatement BlueprintUsage
+
+-- | Represents an enumeration statement
+data Enumeration
+  = Enumeration
       Position
-      ParameterDefinition
-      (Maybe ParameterDefinition)
-
-instance Pos ParameterStatement where
-  position (ParameterStatement p _ _) = p
-
--- | Represents a parameter definition
-data ParameterDefinition
-  = ParameterDefinition
-      Position
-      Identifier
-      ParameterInformation
-
-instance Pos ParameterDefinition where
-  position (ParameterDefinition p _ _) = p
-
--- | Represents one of the 4 types of parameter information
-data ParameterInformation
-  = EnumerationInformation Enumeration
-  | GenerationInformation Generation
-  | BlueprintInformation Blueprint
-  | BlueprintUsageInformation BlueprintUsage
-
--- | Represents an enumeration parameter information
-data Enumeration = Enumeration Position [String]
+      EnumerationPart
+      (Maybe EnumerationPart)
 
 instance Pos Enumeration where
-  position (Enumeration p _) = p
+  position (Enumeration p _ _) = p
 
--- | Represents a generation parameter information
+-- | Represents an enumeration part
+--
+-- Consists of an identifier and a value list
+data EnumerationPart
+  = EnumerationPart
+      Identifier
+      [String]
+
+-- | Values of an enumeration part
+values :: EnumerationPart -> [String]
+values (EnumerationPart _ vs) = vs
+
+-- | Represents a generation statement
 data Generation
-  = -- | Identifiers of the generation
-    Generation
+  = Generation
       Position
+      Identifier
       Mixed
 
 instance Pos Generation where
-  position (Generation p _) = p
+  position (Generation p _ _) = p
 
--- | Represents a blueprint parameter information
+-- | Represents a blueprint statement
 data Blueprint
   = Blueprint
       Position
+      Identifier
       [Property]
       -- ^ Properties of the blueprint
       Bool
       -- ^ Has ellipse?
 
 instance Pos Blueprint where
-  position (Blueprint p _ _) = p
+  position (Blueprint p _ _ _) = p
 
 -- | Represents a property of a blueprint. Just an alias for @String@.
 type Property = String
 
--- | Represents a blueprint usage parameter information
+-- | Represents a blueprint usage statements
 data BlueprintUsage
   = BlueprintUsage
       Position
+      Identifier
+      -- ^ name of the blueprint usage
       Identifier
       -- ^ name of the used blueprint
       [String]
       -- ^ List of values for the blueprint properties
 
 instance Pos BlueprintUsage where
-  position (BlueprintUsage p _ _) = p
+  position (BlueprintUsage p _ _ _) = p
 
 -- | Represents an identifier. Just an alias for @String@.
 type Identifier = String
