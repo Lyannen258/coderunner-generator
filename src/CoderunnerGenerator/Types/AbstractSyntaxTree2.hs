@@ -20,6 +20,9 @@ data Position = Position
     colEnd :: Int
   }
 
+placeholder :: Position -- TO BE REMOVED
+placeholder = Position 0 0 0 0
+
 -- * AST components
 
 -- | Represents a template file as an abstract syntax tree
