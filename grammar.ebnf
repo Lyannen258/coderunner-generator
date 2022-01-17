@@ -6,23 +6,24 @@ Template = ParameterSection, TaskSection, SolutionSection, PreAllocationSection,
 ParameterSection = ParameterHeadline, NEWLINE, ParameterBody;
 ParameterHeadline = "Parameter:";
 ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
-ParameterStatement = ParameterDefinition, [WHITESPACE ,Requires , WHITESPACE, ParameterDefinition];
-Requires = "REQUIRES";
-ParameterDefinition = Identifier, "(", ParameterInformation, ")";
-ParameterInformation = Enumeration | Generation | Blueprint | BlueprintUsage;
 
-Enumeration = Values | ValuesWithComma;
+ParameterStatement = EnumerationStatement | GenerationStatement | BlueprintStatement | BlueprintUsageStatement
+
+EnumerationStatement = Identifier, "(", ValueList, ")", [WHITESPACE, Requires, WHITESPACE, Identifier, "(", ValueList, ")"];
+ValueList = Values | ValuesWithComma;
 Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
 ValuesWithComma = ValueWithComma, {";", ValueWithComma}; (* and with spaces *)
 ValueWithComma = OPT_WS, "{", ANY, "}", OPT_WS;
+Requires = "REQUIRES";
 
-Generation = "{", Mixed, "}" );
+GenerationStatement = Identifier, "({", Mixed, "})"
 
-Blueprint = OPT_WS ,Property, OPT_WS, {",", OPT_WS, Property, OPT_WS}, {",", OPT_WS, Ellipse, OPT_WS};
+BlueprintStatement = Identifier, "(", BlueprintArguments, ")"
+BlueprintArguments = OPT_WS ,Property, OPT_WS, {",", OPT_WS, Property, OPT_WS}, {",", OPT_WS, Ellipse, OPT_WS};
 Property = "@", CAP_WORD;
 Ellipse = "...";
 
-BlueprintUsage = OPT_WS, Identifier, "(", Enumeration, ")", OPT_WS;
+BlueprintUsageStatement = Identifier, "(", OPT_WS, Identifier, "(", ValueList, ")", OPT_WS, ")";
 
 
 (* Parameter Usage Definitions *)
