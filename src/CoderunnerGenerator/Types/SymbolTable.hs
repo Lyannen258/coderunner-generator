@@ -2,9 +2,11 @@ module CoderunnerGenerator.Types.SymbolTable where
 
 import CoderunnerGenerator.Helper (fillToTwenty)
 import CoderunnerGenerator.Types.AbstractSyntaxTree (AST)
+import CoderunnerGenerator.Types.AbstractSyntaxTree2 (Mixed)
 import Data.List (intercalate, intersect, union, (\\))
 import Data.Map (Map)
 import qualified Data.Map as M
+import Control.Monad (foldM)
 
 -- * Symbol Table
 
@@ -26,14 +28,24 @@ merge t1 t2 =
         si <- mergeSymbolInfos (t1 M.! k) (t2 M.! k)
         return (k, si)
    in do
-      merged <- mapM mapperOverlapping overlappingKeys      
-      let single = map (\k -> (k, M.union t1 t2 M.! k)) uniqueKeys
-      let all = merged ++ single
-      return $ M.fromList all
+        merged <- mapM mapperOverlapping overlappingKeys
+        let single = map (\k -> (k, M.union t1 t2 M.! k)) uniqueKeys
+        let all = merged ++ single
+        return $ M.fromList all
+
+mergeMany :: [SymbolTable] -> Either String SymbolTable
+mergeMany = foldM merge empty
 
 empty :: SymbolTable
 empty = M.empty
-  
+
+onlyBlueprintUsagePre :: SymbolTable -> Map String BlueprintUsagePre
+onlyBlueprintUsagePre table =
+  let folder k (BlueprintUsagePreSymbol bpPre) acc =
+        M.insert k bpPre acc
+      folder _ _ acc = acc
+   in M.foldrWithKey folder M.empty table
+
 -- * Symbol Information
 
 data SymbolInformation
@@ -41,21 +53,27 @@ data SymbolInformation
   | GenerationSymbol Generation
   | BlueprintSymbol Blueprint
   | BlueprintUsageSymbol BlueprintUsage
+  | BlueprintUsagePreSymbol BlueprintUsagePre -- in first parsing run, the blueprint usage cannot be entirely processed. This is the information of a blueprint usage before the second run.
 
 instance Show SymbolInformation where
   show (EnumerationSymbol a) = "Enumeration (" ++ intercalate "," (map show a) ++ ")"
   show (GenerationSymbol a) = "Generation"
   show (BlueprintSymbol a) = "Blueprint (" ++ intercalate "," [show a] ++ ")"
-  show (BlueprintUsageSymbol (BlueprintUsage b vs)) =
+  show (BlueprintUsageSymbol (BlueprintUsage b vs add)) =
     "BlueprintUsage BP="
       ++ show b
       ++ ", PropertyValues: "
       ++ intercalate ", " (map (\(a, b) -> a ++ show b) (M.toList vs))
+  show (BlueprintUsagePreSymbol (BlueprintUsagePre b vs)) =
+    "BlueprintUsagePre BP="
+      ++ show b
+      ++ ", PropertyValues: "
+      ++ intercalate ", " vs
 
-mergeSymbolInfos:: SymbolInformation -> SymbolInformation -> Either String SymbolInformation
-mergeSymbolInfos (EnumerationSymbol s1) (EnumerationSymbol s2) = 
+mergeSymbolInfos :: SymbolInformation -> SymbolInformation -> Either String SymbolInformation
+mergeSymbolInfos (EnumerationSymbol s1) (EnumerationSymbol s2) =
   let e = mergeEnumerations s1 s2
-  in return $ EnumerationSymbol e
+   in return $ EnumerationSymbol e
 mergeSymbolInfos _ _ = Left "It is not possible to merge two symbol informations, that are not enumerations."
 
 -- * Enumeration
@@ -78,7 +96,7 @@ mergeEnumerations e1 e2 =
   let mergedValues = concatMap (uncurry mergeEnumerationValues) [(a, b) | a <- e1, b <- e2]
       singleValues = filter filterPredicate (e1 ++ e2)
       filterPredicate x = enumValue x `elem` getDuplicateKeys (e1 ++ e2)
-    in mergedValues ++ singleValues
+   in mergedValues ++ singleValues
 
 getDuplicateKeys :: Enumeration -> [String]
 getDuplicateKeys vs = M.keys multiOccurences
@@ -97,29 +115,36 @@ mergeEnumerationValues v1 v2
 
 -- * Generation
 
-type Generation = [AST]
+type Generation = Mixed
 
 -- * Blueprint
 
-type Blueprint = [Property]
+data Blueprint = Blueprint
+  { properties :: [Property],
+    hasEllipse :: Bool
+  }
+  deriving (Show)
 
-data Property
-  = Property {name :: String}
-  | Ellipse
-  deriving (Show, Eq)
+type Property = String
 
 -- * Blueprint Usage
 
 data BlueprintUsage = BlueprintUsage
   { blueprint :: String,
-    propertyValues :: Map String [String]
+    propertyValues :: Map String String,
+    -- | Ellipse values
+    additionalValues :: [String]
+  }
+
+data BlueprintUsagePre = BlueprintUsagePre
+  { preBlueprint :: String,
+    preValues :: [String]
   }
 
 -- * Helper
 
 tupleToString :: (String, SymbolInformation) -> String
 tupleToString (a, b) = fillToTwenty a ++ show b
-
 
 countOccurences :: Ord a => [a] -> M.Map a Int -> M.Map a Int -- TODO wofür braucht man die Funktion? Was macht sie genau? Als zweiter Parameter macht eig. M.Map a b mehr Sinn
 countOccurences (v : vs) counted =

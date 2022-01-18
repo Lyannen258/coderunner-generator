@@ -9,7 +9,8 @@ ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
 
 ParameterStatement = EnumerationStatement | GenerationStatement | BlueprintStatement | BlueprintUsageStatement
 
-EnumerationStatement = Identifier, "(", ValueList, ")", [WHITESPACE, Requires, WHITESPACE, Identifier, "(", ValueList, ")"];
+EnumerationStatement = EnumerationPart, [WHITESPACE, Requires, WHITESPACE, EnumerationPart];
+EnumerationPart = Identifier, "(", ValueList, ")"
 ValueList = Values | ValuesWithComma;
 Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
 ValuesWithComma = ValueWithComma, {";", ValueWithComma}; (* and with spaces *)

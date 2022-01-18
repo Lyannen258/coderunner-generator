@@ -71,6 +71,10 @@ data EnumerationPart
       Identifier
       [String]
 
+-- | Identifier of an enumeration part
+identifier :: EnumerationPart -> Identifier
+identifier (EnumerationPart id _) = id
+
 -- | Values of an enumeration part
 values :: EnumerationPart -> [String]
 values (EnumerationPart _ vs) = vs
@@ -206,3 +210,22 @@ type TestCode = Mixed
 data TestOutcome
   = ConstantOutcome String
   | ParameterOutcome ParameterUsage
+
+-- * Functions
+
+parameterStatements :: Template -> [ParameterStatement]
+parameterStatements
+  ( Template
+      _
+      ( ParameterSection
+          _
+          ( ParameterBody
+              _
+              statements
+            )
+        )
+      _
+      _
+      _
+      _
+    ) = statements
