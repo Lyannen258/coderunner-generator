@@ -1,12 +1,11 @@
 module CoderunnerGenerator.Types.SymbolTable where
 
 import CoderunnerGenerator.Helper (fillToTwenty)
-import CoderunnerGenerator.Types.AbstractSyntaxTree (AST)
-import CoderunnerGenerator.Types.AbstractSyntaxTree2 (Mixed)
+import CoderunnerGenerator.Types.AbstractSyntaxTree (Mixed)
+import Control.Monad (foldM)
 import Data.List (intercalate, intersect, union, (\\))
 import Data.Map (Map)
 import qualified Data.Map as M
-import Control.Monad (foldM)
 
 -- * Symbol Table
 

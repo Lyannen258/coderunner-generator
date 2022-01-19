@@ -1,96 +1,231 @@
+-- |
+-- Module      : CoderunnerGenerator.Types.AbstractSyntaxTree2
+-- Description : Contains the components that represent an abstract syntax tree.
+--
+-- Contains the components that represent an abstract syntax tree. They are correlated to the rules in grammar.ebnf
+--
+-- The root node is 'Template'.
 module CoderunnerGenerator.Types.AbstractSyntaxTree where
 
-import Data.Tree (Tree (Node), drawTree)
+-- * Pos type class and type
 
--- | Recursive data type for the abstract syntax tree
-data AST = AST
-  { -- | The node label
-    label :: Label,
-    -- | The node value
-    --
-    -- It is the corresponding string in the template code.
-    -- Only leaf nodes have values.
-    value :: String,
-    -- | Child nodes of the node
-    children :: [AST]
+-- | Class for all types, that have a position in a source file
+class Pos a where
+  position :: a -> Position
+
+data Position = Position
+  { lineStart :: Int,
+    lineEnd :: Int,
+    colStart :: Int,
+    colEnd :: Int
   }
 
-instance Show AST where
-  show ast = drawTree $ toDataTree ast
+placeholder :: Position -- TO BE REMOVED
+placeholder = Position 0 0 0 0
 
--- | All possible node labels for the AST
-data Label
-  = CoderunnerFile
-  | ParameterSection
-  | ParameterHeadline
-  | ParameterBody
-  | ParameterStatement
-  | Requires
-  | ParameterDefinition
-  | ParameterInformation
-  | Enumeration
-  | Value
-  | Generation
-  | ArbitraryPart
-  | Blueprint
-  | Property
-  | Ellipse
-  | BlueprintUsage
-  | ParameterUsage
-  | Identifier
-  | PropertyPart
-  | FunctionCallPart
-  | Argument
-  | TaskSection
-  | SolutionSection
-  | PreAllocationSection
-  | Body
-  | TestSection
-  | TestOutcome
-  | TestBody
-  | TestCode
-  | TestCase
-  | Constant
-  deriving (Show, Eq)
+-- * AST components
 
--- | Convert an AST to the Data.Tree type
-toDataTree :: AST -> Tree String
-toDataTree (AST label value children) = Node (show label ++ " (\"" ++ value ++ "\")") (map toDataTree children)
+-- | Represents a template file as an abstract syntax tree
+data Template
+  = Template
+      Position
+      ParameterSection
+      TaskSection
+      SolutionSection
+      PreAllocationSection
+      TestSection
 
--- * AST Information
+instance Pos Template where
+  position (Template p _ _ _ _ _) = p
 
--- | Accepts an AST which must be a ParameterStatement or a children of it. Returns the statement type.
-statementType :: AST -> Either String Label
-statementType (AST Enumeration _ _) = Right Enumeration
-statementType (AST Generation _ _) = Right Generation
-statementType (AST Blueprint _ _) = Right Blueprint
-statementType (AST BlueprintUsage _ _) = Right BlueprintUsage
-statementType (AST ParameterStatement _ children) = statementType (head children)
-statementType (AST ParameterDefinition _ children) = statementType $ children !! 1
-statementType (AST ParameterInformation _ children) = statementType $ head children
-statementType _ =
-  Left "ParameterStatement does not contain a parameter definition"
+-- * Parameter section components
 
--- | Returns, if the given AST has the structure of an enumeration __with__ requires relation
-isEnumerationWithRequires :: AST -> Bool
-isEnumerationWithRequires
-  ( AST
-      ParameterStatement
+-- | Represents the parameter section
+data ParameterSection = ParameterSection Position ParameterBody
+
+-- | Represents the parameter body
+data ParameterBody = ParameterBody Position [ParameterStatement]
+
+-- | Represents a parameter statement
+data ParameterStatement
+  = EnumerationStatement Enumeration
+  | GenerationStatement Generation
+  | BlueprintStatement Blueprint
+  | BlueprintUsageStatement BlueprintUsage
+
+-- | Represents an enumeration statement
+data Enumeration
+  = Enumeration
+      Position
+      EnumerationPart
+      (Maybe EnumerationPart)
+
+instance Pos Enumeration where
+  position (Enumeration p _ _) = p
+
+-- | Represents an enumeration part
+--
+-- Consists of an identifier and a value list
+data EnumerationPart
+  = EnumerationPart
+      Identifier
+      [String]
+
+-- | Identifier of an enumeration part
+identifier :: EnumerationPart -> Identifier
+identifier (EnumerationPart id _) = id
+
+-- | Values of an enumeration part
+values :: EnumerationPart -> [String]
+values (EnumerationPart _ vs) = vs
+
+-- | Represents a generation statement
+data Generation
+  = Generation
+      Position
+      Identifier
+      Mixed
+
+instance Pos Generation where
+  position (Generation p _ _) = p
+
+-- | Represents a blueprint statement
+data Blueprint
+  = Blueprint
+      Position
+      Identifier
+      [Property]
+      -- ^ Properties of the blueprint
+      Bool
+      -- ^ Has ellipse?
+
+instance Pos Blueprint where
+  position (Blueprint p _ _ _) = p
+
+-- | Represents a property of a blueprint. Just an alias for @String@.
+type Property = String
+
+-- | Represents a blueprint usage statements
+data BlueprintUsage
+  = BlueprintUsage
+      Position
+      Identifier
+      -- ^ name of the blueprint usage
+      Identifier
+      -- ^ name of the used blueprint
+      [String]
+      -- ^ List of values for the blueprint properties
+
+instance Pos BlueprintUsage where
+  position (BlueprintUsage p _ _ _) = p
+
+-- | Represents an identifier. Just an alias for @String@.
+type Identifier = String
+
+-- ** Parameter Usage
+
+-- | Represents the usage of a parameter
+data ParameterUsage
+  = ParameterUsage
+      Position
+      Identifier
+      (Maybe PropertyPart)
+
+instance Pos ParameterUsage where
+  position (ParameterUsage p _ _) = p
+
+-- | Represents the usage of a blueprint property in a parameter usage
+data PropertyPart
+  = PropertyPart
+      String
+      -- ^ Property name (without @)
+      (Maybe FunctionCallPart)
+
+-- | Represents a function call part when using a blueprint property in a parameter usage
+type FunctionCallPart = [String]
+
+-- ** Other Section Definitions
+
+-- | Represents a mixture of constants and parameter usages
+type Mixed = [MixedPart]
+
+-- | Represents a part of 'Mixed', either a constant or a parameter usage
+data MixedPart
+  = ParameterPart ParameterUsage
+  | ConstantPart String
+
+-- | Represents the task section
+data TaskSection
+  = TaskSection
+      Position
+      Mixed
+
+instance Pos TaskSection where
+  position (TaskSection p _) = p
+
+-- | Represents the solution section
+data SolutionSection
+  = SolutionSection
+      Position
+      Mixed
+
+instance Pos SolutionSection where
+  position (SolutionSection p _) = p
+
+-- | Represents the pre allocation section
+data PreAllocationSection
+  = PreAllocationSection
+      Position
+      Mixed
+
+instance Pos PreAllocationSection where
+  position (PreAllocationSection p _) = p
+
+-- | Represents the test section
+data TestSection
+  = TestSection
+      Position
+      TestBody
+
+instance Pos TestSection where
+  position (TestSection p _) = p
+
+-- Represents the test section body
+type TestBody = [TestCase]
+
+-- | Represents a test case in the test section
+data TestCase
+  = TestCase
+      Position
+      TestCode
+      TestOutcome
+
+instance Pos TestCase where
+  position (TestCase p _ _) = p
+
+-- | Represents the test code of a test case
+type TestCode = Mixed
+
+-- | Represents the expected test outcome
+data TestOutcome
+  = ConstantOutcome String
+  | ParameterOutcome ParameterUsage
+
+-- * Functions
+
+parameterStatements :: Template -> [ParameterStatement]
+parameterStatements
+  ( Template
       _
-      [ def1@(AST ParameterDefinition _ _),
-        req@(AST Requires _ _),
-        def2@(AST ParameterDefinition _ _)
-        ]
-    ) = True
-isEnumerationWithRequires _ = False
-
--- | Returns, if the given AST has the structure of an enumeration with__out__ requires relation
-isEnumerationWithoutRequires :: AST -> Bool
-isEnumerationWithoutRequires
-  ( AST
-      ParameterStatement
+      ( ParameterSection
+          _
+          ( ParameterBody
+              _
+              statements
+            )
+        )
       _
-      [ def@(AST ParameterDefinition _ _)
-        ]
-    ) = True
-isEnumerationWithoutRequires _ = False
+      _
+      _
+      _
+    ) = statements

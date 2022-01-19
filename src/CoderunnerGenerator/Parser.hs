@@ -10,7 +10,7 @@
 -- The parsers are loosely correlated with the rules in /grammar.ebnf/.
 module CoderunnerGenerator.Parser where
 
-import CoderunnerGenerator.Types.AbstractSyntaxTree2
+import CoderunnerGenerator.Types.AbstractSyntaxTree
 import Text.Parsec
 
 -- * Main Parser

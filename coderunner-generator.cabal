@@ -31,7 +31,6 @@ library
       CoderunnerGenerator.Types.ConstraintGraph,
       CoderunnerGenerator.Types.ConfigurationState,
       CoderunnerGenerator.Types.AbstractSyntaxTree,
-      CoderunnerGenerator.Types.AbstractSyntaxTree2,
       CoderunnerGenerator.Types.SymbolTable
 
   if os(windows)
