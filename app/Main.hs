@@ -6,7 +6,7 @@ import CoderunnerGenerator.Generator
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Interaction
 import CoderunnerGenerator.Parser
-import CoderunnerGenerator.Types.AbstractSyntaxTree
+import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
 import qualified CoderunnerGenerator.SemanticAnalyzer as SA
 import qualified CoderunnerGenerator.Types.SymbolTable as ST
 import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
@@ -57,20 +57,20 @@ createOutputDirectory filePath = do
 
 -- Parse Functions
 
-writeParseResult :: String -> Either ParseError AST -> IO ()
+writeParseResult :: String -> Either ParseError AST.Template-> IO ()
 writeParseResult filePath parseResult = do
   writeToFile
     filePath
     "/AST.txt"
     (parseResultToString parseResult)
 
-parseString :: String -> Either ParseError AST
+parseString :: String -> Either ParseError AST.Template
 parseString = parse coderunnerParser ""
 
-parseResultToString :: Either ParseError AST -> String
+parseResultToString :: Either ParseError AST.Template -> String
 parseResultToString parseResult = case parseResult of
   Left a -> show a
-  Right b -> drawTree $ toDataTree b
+  Right b -> show b
 
 -- Semantic Analysis Functions
 
