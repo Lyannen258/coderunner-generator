@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 -- |
 -- Module      : CoderunnerGenerator.Types.AbstractSyntaxTree2
 -- Description : Contains the components that represent an abstract syntax tree.
@@ -5,19 +9,20 @@
 -- Contains the components that represent an abstract syntax tree. They are correlated to the rules in grammar.ebnf
 --
 -- The root node is 'Template'.
+--
+-- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
 module CoderunnerGenerator.Types.AbstractSyntaxTree where
+
+import Lens.Micro.TH
+import Lens.Micro.Extras (view)
 
 -- * Pos type class and type
 
--- | Class for all types, that have a position in a source file
-class Pos a where
-  position :: a -> Position
-
 data Position = Position
-  { lineStart :: Int,
-    lineEnd :: Int,
-    colStart :: Int,
-    colEnd :: Int
+  { _lineStart :: Int,
+    _lineEnd :: Int,
+    _colStart :: Int,
+    _colEnd :: Int
   }
 
 placeholder :: Position -- TO BE REMOVED
@@ -26,25 +31,28 @@ placeholder = Position 0 0 0 0
 -- * AST components
 
 -- | Represents a template file as an abstract syntax tree
-data Template
-  = Template
-      Position
-      ParameterSection
-      TaskSection
-      SolutionSection
-      PreAllocationSection
-      TestSection
-
-instance Pos Template where
-  position (Template p _ _ _ _ _) = p
+data Template = Template
+  { templatePosition :: Position,
+    templateParameterSection :: ParameterSection,
+    templateTaskSection :: TaskSection,
+    templateSolutionSection :: SolutionSection,
+    templatePreAllocationSection :: PreAllocationSection,
+    templateTestSection :: TestSection
+  }
 
 -- * Parameter section components
 
 -- | Represents the parameter section
-data ParameterSection = ParameterSection Position ParameterBody
+data ParameterSection = ParameterSection
+  { parameterSectionPosition :: Position,
+    parameterSectionParameterBody :: ParameterBody
+  }
 
 -- | Represents the parameter body
-data ParameterBody = ParameterBody Position [ParameterStatement]
+data ParameterBody = ParameterBody
+  { parameterBodyPosition :: Position,
+    parameterBodyParameterStatements :: [ParameterStatement]
+  }
 
 -- | Represents a parameter statement
 data ParameterStatement
@@ -54,70 +62,50 @@ data ParameterStatement
   | BlueprintUsageStatement BlueprintUsage
 
 -- | Represents an enumeration statement
-data Enumeration
-  = Enumeration
-      Position
-      EnumerationPart
-      (Maybe EnumerationPart)
-
-instance Pos Enumeration where
-  position (Enumeration p _ _) = p
+data Enumeration = Enumeration
+  { enumerationPosition :: Position,
+    enumerationMain :: EnumerationPart,
+    enumerationRequires :: Maybe EnumerationPart
+  }
 
 -- | Represents an enumeration part
 --
 -- Consists of an identifier and a value list
-data EnumerationPart
-  = EnumerationPart
-      Identifier
-      [String]
-
--- | Identifier of an enumeration part
-identifier :: EnumerationPart -> Identifier
-identifier (EnumerationPart id _) = id
-
--- | Values of an enumeration part
-values :: EnumerationPart -> [String]
-values (EnumerationPart _ vs) = vs
+data EnumerationPart = EnumerationPart
+  { enumerationPartIdentifier :: Identifier,
+    enumerationPartValues :: [String]
+  }
 
 -- | Represents a generation statement
-data Generation
-  = Generation
-      Position
-      Identifier
-      Mixed
-
-instance Pos Generation where
-  position (Generation p _ _) = p
+data Generation = Generation
+  { generationPosition :: Position,
+    generationIdentifier :: Identifier,
+    generationBody :: Mixed
+  }
 
 -- | Represents a blueprint statement
-data Blueprint
-  = Blueprint
-      Position
-      Identifier
-      [Property]
-      -- ^ Properties of the blueprint
-      Bool
-      -- ^ Has ellipse?
-
-instance Pos Blueprint where
-  position (Blueprint p _ _ _) = p
+data Blueprint = -- | Has ellipse?
+  Blueprint
+  { blueprintPosition :: Position,
+    blueprintIdentifier :: Identifier,
+    -- | Properties of the blueprint
+    blueprintProperties :: [Property],
+    blueprintHasEllipse :: Bool
+  }
 
 -- | Represents a property of a blueprint. Just an alias for @String@.
 type Property = String
 
 -- | Represents a blueprint usage statements
-data BlueprintUsage
-  = BlueprintUsage
-      Position
-      Identifier
-      -- ^ name of the blueprint usage
-      Identifier
-      -- ^ name of the used blueprint
-      [String]
-      -- ^ List of values for the blueprint properties
-
-instance Pos BlueprintUsage where
-  position (BlueprintUsage p _ _ _) = p
+data BlueprintUsage = BlueprintUsage
+  { blueprintUsagePosition :: Position,
+    -- | name of the blueprint usage
+    blueprintUsageIdentifier :: Identifier,
+    -- | name of the used blueprint
+    blueprintUsageblueprintUsed :: Identifier,
+    -- | List of values for the blueprint properties
+    blueprintUsageValues :: [String]
+  }
 
 -- | Represents an identifier. Just an alias for @String@.
 type Identifier = String
@@ -125,21 +113,18 @@ type Identifier = String
 -- ** Parameter Usage
 
 -- | Represents the usage of a parameter
-data ParameterUsage
-  = ParameterUsage
-      Position
-      Identifier
-      (Maybe PropertyPart)
-
-instance Pos ParameterUsage where
-  position (ParameterUsage p _ _) = p
+data ParameterUsage = ParameterUsage
+  { parameterUsagePosition :: Position,
+    parameterUsageIdentifier :: Identifier,
+    parameterUsagePropertyPart :: Maybe PropertyPart
+  }
 
 -- | Represents the usage of a blueprint property in a parameter usage
-data PropertyPart
-  = PropertyPart
-      String
-      -- ^ Property name (without @)
-      (Maybe FunctionCallPart)
+data PropertyPart = PropertyPart
+  { -- | Property name (without @)
+    propertyPartProperty :: String,
+    propertyPartArguments :: Maybe FunctionCallPart
+  }
 
 -- | Represents a function call part when using a blueprint property in a parameter usage
 type FunctionCallPart = [String]
@@ -155,53 +140,38 @@ data MixedPart
   | ConstantPart String
 
 -- | Represents the task section
-data TaskSection
-  = TaskSection
-      Position
-      Mixed
-
-instance Pos TaskSection where
-  position (TaskSection p _) = p
+data TaskSection = TaskSection
+  { taskSectionPosition :: Position,
+    taskSectionBody :: Mixed
+  }
 
 -- | Represents the solution section
-data SolutionSection
-  = SolutionSection
-      Position
-      Mixed
-
-instance Pos SolutionSection where
-  position (SolutionSection p _) = p
+data SolutionSection = SolutionSection
+  { solutionSectionPosition :: Position,
+    solutionSectionBody :: Mixed
+  }
 
 -- | Represents the pre allocation section
-data PreAllocationSection
-  = PreAllocationSection
-      Position
-      Mixed
-
-instance Pos PreAllocationSection where
-  position (PreAllocationSection p _) = p
+data PreAllocationSection = PreAllocationSection
+  { preAllocationSectionPosition :: Position,
+    preAllocationSectionBody :: Mixed
+  }
 
 -- | Represents the test section
-data TestSection
-  = TestSection
-      Position
-      TestBody
-
-instance Pos TestSection where
-  position (TestSection p _) = p
+data TestSection = TestSection
+  { testSectionPosition :: Position,
+    testSectionBody :: TestBody
+  }
 
 -- Represents the test section body
 type TestBody = [TestCase]
 
 -- | Represents a test case in the test section
-data TestCase
-  = TestCase
-      Position
-      TestCode
-      TestOutcome
-
-instance Pos TestCase where
-  position (TestCase p _ _) = p
+data TestCase = TestCase
+  { testCasePosition :: Position,
+    testCaseCode :: TestCode,
+    testCaseOutcome :: TestOutcome
+  }
 
 -- | Represents the test code of a test case
 type TestCode = Mixed
@@ -211,21 +181,27 @@ data TestOutcome
   = ConstantOutcome String
   | ParameterOutcome ParameterUsage
 
+-- Generate Lenses
+
+makeLenses ''Position
+
+makeFields ''Template
+makeFields ''ParameterSection
+makeFields ''ParameterBody
+makeFields ''Enumeration
+makeFields ''EnumerationPart
+makeFields ''Generation
+makeFields ''Blueprint
+makeFields ''BlueprintUsage
+makeFields ''ParameterUsage
+makeFields ''PropertyPart
+makeFields ''TaskSection
+makeFields ''SolutionSection
+makeFields ''PreAllocationSection
+makeFields ''TestSection
+makeFields ''TestCase
+
 -- * Functions
 
-parameterStatements :: Template -> [ParameterStatement]
-parameterStatements
-  ( Template
-      _
-      ( ParameterSection
-          _
-          ( ParameterBody
-              _
-              statements
-            )
-        )
-      _
-      _
-      _
-      _
-    ) = statements
+instance HasParameterStatements Template [ParameterStatement] where
+  parameterStatements = parameterSection . parameterBody . parameterStatements

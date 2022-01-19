@@ -25,6 +25,7 @@ import Data.Maybe (catMaybes, fromMaybe, maybeToList)
 import Data.Set (fromList)
 import Debug.Trace
 import Lens.Micro (each, (^.), (^..), _2)
+import Lens.Micro.Extras (view)
 
 -- * Semantic Result
 
@@ -45,7 +46,7 @@ semanticAnalysis ast = do
 
 analyzeTemplate :: Template -> SemanticResult
 analyzeTemplate template = do
-  let statements = parameterStatements template
+  let statements = view parameterStatements template
   partialResults <- mapM analyzeStatement statements
   let (tables, graphs) = unzip partialResults
   mergedTables <- ST.mergeMany tables
@@ -79,8 +80,8 @@ analyzeEnumeration (Enumeration _ part1 mPart2) = do
 
 analyzeEnumerationPart :: EnumerationPart -> (Identifier, [EnumerationValue])
 analyzeEnumerationPart part =
-  let id = identifier part
-      vs = values part
+  let id = view identifier part
+      vs = view values part
       enumValues = map (`ST.EnumerationValue` []) vs
    in (id, enumValues)
 
