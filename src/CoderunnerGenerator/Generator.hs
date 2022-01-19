@@ -1,18 +1,23 @@
 module CoderunnerGenerator.Generator where
 
-import Control.Monad (foldM)
-import Data.List (intercalate)
-import qualified Data.Map as M
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Interaction
 import CoderunnerGenerator.Types.AbstractSyntaxTree
 import CoderunnerGenerator.Types.SymbolTable as ST
+import Control.Monad (foldM)
+import Data.List (intercalate)
+import qualified Data.Map as M
+import Data.Maybe (isNothing)
+import Lens.Micro.Extras
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
 
-generateOutput :: AST -> SymbolTable -> InteractionResult -> FilePath -> Either String String
-generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt filePath = do
+generateOutput :: Template -> SymbolTable -> InteractionResult -> FilePath -> Either String String
+generateOutput t st vt filePath = do
+  let task = view (taskSection . body) t
+  let sol = view (solutionSection . body) t
+  let pre = view (preAllocationSection . body) t
   taskGen <- generateBody task st vt
   solGen <- generateBody sol st vt
   preGen <- generateBody pre st vt
@@ -25,11 +30,10 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
             (Attr (unqual "type") "coderunner")
             ( node
                 (unqual "question")
-                [
-                node (unqual "name")
-                  (
-                    node (unqual "text") (CData CDataText nameGen Nothing)
-                  ),
+                [ node
+                    (unqual "name")
+                    ( node (unqual "text") (CData CDataText nameGen Nothing)
+                    ),
                   node
                     (unqual "questiontext")
                     ( Attr (unqual "format") "html",
@@ -48,7 +52,7 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
                   node (unqual "answerboxlines") (CData CDataText "18" Nothing),
                   node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
                   node (unqual "answerpreload") (CData CDataVerbatim preGen Nothing),
-              -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
+                  -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
                   -- node (unqual "template") (CData CDataVerbatim solTemp Nothing),
                   node (unqual "answer") (CData CDataVerbatim solGen Nothing),
                   node (unqual "validateonsave") (CData CDataText "1" Nothing),
@@ -70,58 +74,68 @@ generateOutput ast@(AST CoderunnerFile _ (_ : task : sol : pre : cs)) st vt file
 --createSolutionTemplate haystack needle = strReplace needle "solution" haystack
 -- Perhapts using Regex-> Text.Regex subRegex sieht da ganz gut aus.
 
-
-generateBody :: AST -> SymbolTable -> InteractionResult -> Either String String
-generateBody (AST TaskSection _ (body : cs)) st vt = generateBody body st vt
-generateBody (AST SolutionSection _ (body : cs)) st vt = generateBody body st vt
-generateBody (AST PreAllocationSection _ (body : cs)) st vt = generateBody body st vt
-generateBody ast@(AST Body _ cs) st vt = do
-  foldM folder "" cs
+generateBody :: Mixed -> SymbolTable -> InteractionResult -> Either String String
+generateBody m st ir = do
+  foldM folder "" m
   where
-    folder :: String -> AST -> Either String String
-    folder str ast@(AST Constant v _) = do return $ str ++ v
-    folder str ast@(AST ParameterUsage _ cs) = do
-      let l = length cs
-      val <- case l of
-        0 -> Left ("Parameter Usage has no subnodes: " ++ show ast)
-        1 -> analyzeId (head cs) st vt
-        2 -> analyzeIdAndProp cs st vt
-        x -> Left ("ParameterUsage has too many subnodes" ++ show ast)
-      return $ str ++ val
+    folder :: String -> MixedPart -> Either String String
+    folder str (ConstantPart c) = do return $ str ++ c
+    folder str (ParameterPart pu) = do
+      let maybepp = view propertyPart pu
+      let id = view identifier pu
+      code <-
+        ( case maybepp of
+            Nothing -> getIrSingleValue id ir
+            Just pp -> evaluateWithPropertyPart id pp st ir
+          )
+      return $ str ++ code
 
--- only with single values
-analyzeId :: AST -> SymbolTable -> InteractionResult -> Either String String
-analyzeId ast@(AST Identifier v _) st vt = do getIrSingleValue v vt
-analyzeId ast _ _ = do Left $ "Not an identifier node: " ++ show ast
+evaluateWithPropertyPart ::
+  Identifier ->
+  PropertyPart ->
+  SymbolTable ->
+  InteractionResult ->
+  Either String String
+evaluateWithPropertyPart id pp st ir = do
+  symbolInfo <- maybeToEither (M.lookup id st) ("No symbol found for identifier: '" ++ id ++ "'")
+  case symbolInfo of
+    BlueprintUsageSymbol b -> evaluateBlueprintProp id b pp
+    EnumerationSymbol e -> evaluateFunctionCall id e pp
+    _ -> Left "Using a parameter property or calling a function on the parameter is only possible with a blueprint usage parameter or an enumeration with multiple parameters respectively"
 
-analyzeIdAndProp :: [AST] -> SymbolTable -> InteractionResult -> Either String String
--- only with Blueprint
-analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop []] st vt = do
-  symbolEntry <- maybeToEither (M.lookup id st) ("No symbol found for identifier: '" ++ id ++ "'")
-  case symbolEntry of
-    BlueprintUsageSymbol (ST.BlueprintUsage b vs) -> getPropertyValue vs
-    x -> Left "PropertyPart can only be used with blueprint-identifiers"
-  where
-    getPropertyValue m = do
-      propValues <- maybeToEither (M.lookup prop m) ("Symbol '" ++ id ++ "' has no property '" ++ prop ++ "'")
-      return $ head propValues
+evaluateBlueprintProp :: Identifier -> ST.BlueprintUsage -> PropertyPart -> Either String String
+evaluateBlueprintProp id bp pp =
+  let prop = view property pp
+      maybeFuncPart = view arguments pp
+      noFuncPart = isNothing maybeFuncPart
+      propValues = propertyValues bp
+   in if noFuncPart
+        then maybeToEither (M.lookup prop propValues) ("Symbol '" ++ id ++ "' has no property '" ++ prop ++ "'")
+        else Left "It is not possible to use a function call with a blueprint usage parameter"
 
--- only with multiple values
-analyzeIdAndProp [AST Identifier id _, AST PropertyPart prop [AST FunctionCallPart _ optArg]] st vt = do
-  values <- getIrValues id vt
-  let args =
-        if null optArg
-          then ""
-          else value (head optArg)
-  applyFunctionCall prop args values
-  where
-    applyFunctionCall "ALL" _ values =
-      Right $ intercalate "\n" values
-    applyFunctionCall "CHOOSE_AT_RANDOM" arg values =
-      case readMaybe arg of
+evaluateFunctionCall :: Identifier -> ST.Enumeration -> PropertyPart -> Either String String
+evaluateFunctionCall id e pp =
+  let prop = view property pp
+      maybeFuncPart = view arguments pp
+   in do
+        funcPart <- maybeToEither maybeFuncPart ("Enumeration parameter " ++ id ++ " has no property " ++ prop ++ ". Maybe you forgot to add arguments to the function call.")
+        case prop of
+          "ALL" -> evaluateAllFunction e
+          "CHOOSE_AT_RANDOM" -> evaluateRandomFunction id funcPart e
+          _ -> Left "Not a valid function call"
+
+evaluateAllFunction :: ST.Enumeration -> Either String String
+evaluateAllFunction e =
+  let valueStrings = map enumValue e
+   in Right $ intercalate "\n" valueStrings
+
+evaluateRandomFunction :: Identifier -> FunctionCallPart -> ST.Enumeration -> Either String String
+evaluateRandomFunction id fcp e =
+  let firstArg = head fcp
+      valueStrings = map enumValue e
+   in case readMaybe firstArg of
         Just i ->
-          if i <= length values
-            then Right $ intercalate "\n" $ take i values
+          if i <= length e
+            then Right $ intercalate "\n" $ take i valueStrings
             else Left "More random values requested than there are in the list"
         Nothing -> Left "CHOOSE_AT_RANDOM was called with a non-integer argument"
-analyzeIdAndProp ast st vt = Left $ "Not a valid ast: " ++ show ast
