@@ -13,8 +13,8 @@
 -- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
 module CoderunnerGenerator.Types.AbstractSyntaxTree where
 
-import Lens.Micro.TH
 import Lens.Micro.Extras (view)
+import Lens.Micro.TH
 
 -- * Pos type class and type
 
@@ -24,6 +24,7 @@ data Position = Position
     _colStart :: Int,
     _colEnd :: Int
   }
+  deriving (Show)
 
 placeholder :: Position -- TO BE REMOVED
 placeholder = Position 0 0 0 0
@@ -39,6 +40,7 @@ data Template = Template
     templatePreAllocationSection :: PreAllocationSection,
     templateTestSection :: TestSection
   }
+  deriving (Show)
 
 -- * Parameter section components
 
@@ -47,12 +49,14 @@ data ParameterSection = ParameterSection
   { parameterSectionPosition :: Position,
     parameterSectionParameterBody :: ParameterBody
   }
+  deriving (Show)
 
 -- | Represents the parameter body
 data ParameterBody = ParameterBody
   { parameterBodyPosition :: Position,
     parameterBodyParameterStatements :: [ParameterStatement]
   }
+  deriving (Show)
 
 -- | Represents a parameter statement
 data ParameterStatement
@@ -60,6 +64,7 @@ data ParameterStatement
   | GenerationStatement Generation
   | BlueprintStatement Blueprint
   | BlueprintUsageStatement BlueprintUsage
+  deriving (Show)
 
 -- | Represents an enumeration statement
 data Enumeration = Enumeration
@@ -67,6 +72,7 @@ data Enumeration = Enumeration
     enumerationMain :: EnumerationPart,
     enumerationRequires :: Maybe EnumerationPart
   }
+  deriving (Show)
 
 -- | Represents an enumeration part
 --
@@ -75,6 +81,7 @@ data EnumerationPart = EnumerationPart
   { enumerationPartIdentifier :: Identifier,
     enumerationPartValues :: [String]
   }
+  deriving (Show)
 
 -- | Represents a generation statement
 data Generation = Generation
@@ -82,6 +89,7 @@ data Generation = Generation
     generationIdentifier :: Identifier,
     generationBody :: Mixed
   }
+  deriving (Show)
 
 -- | Represents a blueprint statement
 data Blueprint = -- | Has ellipse?
@@ -92,6 +100,7 @@ data Blueprint = -- | Has ellipse?
     blueprintProperties :: [Property],
     blueprintHasEllipse :: Bool
   }
+  deriving (Show)
 
 -- | Represents a property of a blueprint. Just an alias for @String@.
 type Property = String
@@ -106,6 +115,7 @@ data BlueprintUsage = BlueprintUsage
     -- | List of values for the blueprint properties
     blueprintUsageValues :: [String]
   }
+  deriving (Show)
 
 -- | Represents an identifier. Just an alias for @String@.
 type Identifier = String
@@ -118,6 +128,7 @@ data ParameterUsage = ParameterUsage
     parameterUsageIdentifier :: Identifier,
     parameterUsagePropertyPart :: Maybe PropertyPart
   }
+  deriving (Show)
 
 -- | Represents the usage of a blueprint property in a parameter usage
 data PropertyPart = PropertyPart
@@ -125,6 +136,7 @@ data PropertyPart = PropertyPart
     propertyPartProperty :: String,
     propertyPartArguments :: Maybe FunctionCallPart
   }
+  deriving (Show)
 
 -- | Represents a function call part when using a blueprint property in a parameter usage
 type FunctionCallPart = [String]
@@ -138,30 +150,35 @@ type Mixed = [MixedPart]
 data MixedPart
   = ParameterPart ParameterUsage
   | ConstantPart String
+  deriving (Show)
 
 -- | Represents the task section
 data TaskSection = TaskSection
   { taskSectionPosition :: Position,
     taskSectionBody :: Mixed
   }
+  deriving (Show)
 
 -- | Represents the solution section
 data SolutionSection = SolutionSection
   { solutionSectionPosition :: Position,
     solutionSectionBody :: Mixed
   }
+  deriving (Show)
 
 -- | Represents the pre allocation section
 data PreAllocationSection = PreAllocationSection
   { preAllocationSectionPosition :: Position,
     preAllocationSectionBody :: Mixed
   }
+  deriving (Show)
 
 -- | Represents the test section
 data TestSection = TestSection
   { testSectionPosition :: Position,
     testSectionBody :: TestBody
   }
+  deriving (Show)
 
 -- Represents the test section body
 type TestBody = [TestCase]
@@ -172,6 +189,7 @@ data TestCase = TestCase
     testCaseCode :: TestCode,
     testCaseOutcome :: TestOutcome
   }
+  deriving (Show)
 
 -- | Represents the test code of a test case
 type TestCode = Mixed
@@ -180,6 +198,7 @@ type TestCode = Mixed
 data TestOutcome
   = ConstantOutcome String
   | ParameterOutcome ParameterUsage
+  deriving (Show)
 
 -- Generate Lenses
 
