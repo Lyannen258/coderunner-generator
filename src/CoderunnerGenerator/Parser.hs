@@ -51,7 +51,7 @@ parameterStatementParser =
 enumerationParser :: Parsec String () ParameterStatement
 enumerationParser = do
   enumPart1 <- enumerationPartParser
-  requiresParser
+  optionMaybe requiresParser
   enumPart2 <- optionMaybe enumerationPartParser
   return $
     EnumerationStatement $
