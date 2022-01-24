@@ -1,27 +1,29 @@
 module Main where
 
-import Control.Monad.Trans.Except (runExceptT)
-import Data.Tree (drawTree)
+import CoderunnerGenerator.CmdArgs (Args (templateFile))
+import qualified CoderunnerGenerator.CmdArgs as CmdArgs
 import CoderunnerGenerator.Generator
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Interaction
 import CoderunnerGenerator.Parser
-import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
 import qualified CoderunnerGenerator.SemanticAnalyzer as SA
-import qualified CoderunnerGenerator.Types.SymbolTable as ST
+import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
 import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
+import qualified CoderunnerGenerator.Types.SymbolTable as ST
+import Control.Monad.Trans.Except (runExceptT)
+import Data.Text.Lazy (unpack)
+import Data.Tree (drawTree)
 import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
 import System.IO
 import Text.Parsec
-import Text.Pretty.Simple (pShowNoColor)
-import Data.Text.Lazy (unpack)
+import Text.Pretty.Simple (pPrint, pShowNoColor)
 
 main :: IO ()
 main = do
-  args <- getArgs
-  mapM_ analyzeFile args
+  args <- CmdArgs.executeParser
+  analyzeFile $ templateFile args
 
 analyzeFile :: String -> IO ()
 analyzeFile filePath = do
@@ -57,7 +59,7 @@ createOutputDirectory filePath = do
 
 -- Parse Functions
 
-writeParseResult :: String -> Either ParseError AST.Template-> IO ()
+writeParseResult :: String -> Either ParseError AST.Template -> IO ()
 writeParseResult filePath parseResult = do
   writeToFile
     filePath
@@ -81,8 +83,6 @@ writeSemanticResult filePath result = do
         Left err -> (err, err)
   writeToFile filePath "/ST.txt" (fst output)
   writeToFile filePath "/CG.txt" (snd output)
-
-
 
 -- Final result
 writeFinalResult :: String -> Either String String -> IO ()
