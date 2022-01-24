@@ -11,11 +11,6 @@ import qualified Data.Map as M
 
 type SymbolTable = Map String SymbolInformation
 
-showTable :: SymbolTable -> String
-showTable symbolTable =
-  let tableBody = intercalate "\n" (map tupleToString (M.toList symbolTable))
-   in "Identifier          Type\n\n" ++ tableBody
-
 merge :: SymbolTable -> SymbolTable -> Either String SymbolTable
 merge t1 t2 =
   let keys1 = M.keys t1
@@ -53,21 +48,7 @@ data SymbolInformation
   | BlueprintSymbol Blueprint
   | BlueprintUsageSymbol BlueprintUsage
   | BlueprintUsagePreSymbol BlueprintUsagePre -- in first parsing run, the blueprint usage cannot be entirely processed. This is the information of a blueprint usage before the second run.
-
-instance Show SymbolInformation where
-  show (EnumerationSymbol a) = "Enumeration (" ++ intercalate "," (map show a) ++ ")"
-  show (GenerationSymbol a) = "Generation"
-  show (BlueprintSymbol a) = "Blueprint (" ++ intercalate "," [show a] ++ ")"
-  show (BlueprintUsageSymbol (BlueprintUsage b vs add)) =
-    "BlueprintUsage BP="
-      ++ show b
-      ++ ", PropertyValues: "
-      ++ intercalate ", " (map (\(a, b) -> a ++ show b) (M.toList vs))
-  show (BlueprintUsagePreSymbol (BlueprintUsagePre b vs)) =
-    "BlueprintUsagePre BP="
-      ++ show b
-      ++ ", PropertyValues: "
-      ++ intercalate ", " vs
+  deriving (Show)
 
 mergeSymbolInfos :: SymbolInformation -> SymbolInformation -> Either String SymbolInformation
 mergeSymbolInfos (EnumerationSymbol s1) (EnumerationSymbol s2) =
@@ -134,16 +115,15 @@ data BlueprintUsage = BlueprintUsage
     -- | Ellipse values
     additionalValues :: [String]
   }
+  deriving (Show)
 
 data BlueprintUsagePre = BlueprintUsagePre
   { preBlueprint :: String,
     preValues :: [String]
   }
+  deriving (Show)
 
 -- * Helper
-
-tupleToString :: (String, SymbolInformation) -> String
-tupleToString (a, b) = fillToTwenty a ++ show b
 
 countOccurences :: Ord a => [a] -> M.Map a Int -> M.Map a Int -- TODO wofür braucht man die Funktion? Was macht sie genau? Als zweiter Parameter macht eig. M.Map a b mehr Sinn
 countOccurences (v : vs) counted =

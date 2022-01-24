@@ -39,12 +39,9 @@ data Value = Value
   { _parameter :: String,
     _value :: [String]
   }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 makeLenses ''Value
-
-instance Show Value where
-  show (Value p v) = p ++ " " ++ intercalate "," v
 
 -- | Data type for an edge in the constraint graph
 type Edge = (Value, Value)

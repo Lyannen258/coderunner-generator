@@ -69,15 +69,15 @@ parseString = parse coderunnerParser ""
 
 parseResultToString :: Either ParseError AST.Template -> String
 parseResultToString parseResult = case parseResult of
-  Left a -> show a
-  Right b -> show b
+  Left a -> unpack $ pShowNoColor a
+  Right b -> unpack $ pShowNoColor b
 
 -- Semantic Analysis Functions
 
 writeSemanticResult :: String -> Either String (ST.SymbolTable, CG.ConstraintGraph) -> IO ()
 writeSemanticResult filePath result = do
   let output = case result of
-        Right (st, cg) -> (ST.showTable st, unpack (pShowNoColor cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
+        Right (st, cg) -> (unpack (pShowNoColor st), unpack (pShowNoColor cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
         Left err -> (err, err)
   writeToFile filePath "/ST.txt" (fst output)
   writeToFile filePath "/CG.txt" (snd output)
