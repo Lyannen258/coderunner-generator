@@ -13,3 +13,9 @@ maybeToEither Nothing s = Left s
 toTuple2 :: [a] -> (a, a)
 toTuple2 (x : y : l) = (x, y)
 toTuple2 l = error "Cannot convert a list with size < 2 to tuple of size 2"
+
+fillToTwenty :: String -> String
+fillToTwenty s =
+  if length s < 20
+    then fillToTwenty (s ++ " ")
+    else s

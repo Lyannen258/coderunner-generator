@@ -1,220 +1,148 @@
+-- |
+-- Module      : CoderunnerGenerator.Parser
+-- Description : Contains parsers to analyze a template file and form an abstract syntax tree
+--
+-- Contains parsers to analyze a template file and form an abstract syntax tree
+--
+-- The main parser is @coderunnerParser@. It is made up of section specific parsers, which
+-- in turn are constructed by using even more granular parsers.
+--
+-- The parsers are loosely correlated with the rules in /grammar.ebnf/.
 module CoderunnerGenerator.Parser where
 
-import Data.Tree (Tree (Node), drawTree)
-import GHC.Show (Show)
+import CoderunnerGenerator.Types.AbstractSyntaxTree
 import Text.Parsec
-import Text.Parsec.Token (GenLanguageDef (caseSensitive))
 
-data AST = AST
-  { label :: Label,
-    value :: String,
-    children :: [AST]
-  }
+-- * Main Parser
 
-instance Show AST where
-  show ast = drawTree $ toDataTree ast
+-- | The main parser for a template file
+coderunnerParser :: Parsec String () Template
+coderunnerParser =
+  Template
+    placeholder
+    <$> parameterSectionParser
+    <*> taskSectionParser
+    <*> solutionSectionParser
+    <*> preAllocationSectionParser
+    <*> testSectionParser
 
-data Label
-  = CoderunnerFile
-  | ParameterSection
-  | ParameterHeadline
-  | ParameterBody
-  | ParameterStatement
-  | Requires
-  | ParameterDefinition
-  | ParameterInformation
-  | Enumeration
-  | Value
-  | Generation
-  | ArbitraryPart
-  | Blueprint
-  | Property
-  | Ellipse
-  | BlueprintUsage
-  | ParameterUsage
-  | Identifier
-  | PropertyPart
-  | FunctionCallPart
-  | Argument
-  | TaskSection
-  | SolutionSection
-  | PreAllocationSection
-  | Body
-  | TestSection
-  | TestOutcome
-  | TestBody
-  | TestCode
-  | TestCase
-  | Constant
-  deriving (Show, Eq)
+-- ** Parameter Section
 
-toDataTree :: AST -> Tree String
-toDataTree (AST label value children) = Node (show label ++ " (\"" ++ value ++ "\")") (map toDataTree children)
-
-coderunnerParser :: Parsec String () AST
-coderunnerParser = do
-  parameterSection <- parameterSectionParser
-  taskSection <- taskSectionParser
-  solutionSection <- solutionSectionParser
-  preAllocationSection <- preAllocationSectionParser
-  testSection <- testSectionParser
-  return
-    ( AST
-        CoderunnerFile
-        ""
-        [ parameterSection,
-          taskSection,
-          solutionSection,
-          preAllocationSection,
-          testSection
-        ]
-    )
-
--- Parameter Section Parsers
-
-parameterSectionParser :: Parsec String () AST
+-- | Parser for the parameter section of a template
+parameterSectionParser :: Parsec String () ParameterSection
 parameterSectionParser = do
   headline <- string "Parameter:"
   linebreak
-  body <- parameterBodyParser
-  return
-    ( AST
-        ParameterSection
-        ""
-        [ AST ParameterHeadline headline [],
-          body
-        ]
-    )
+  ParameterSection placeholder <$> parameterBodyParser
 
-parameterBodyParser :: Parsec String () AST
+parameterBodyParser :: Parsec String () ParameterBody
 parameterBodyParser = do
   statement1 <- parameterStatementParser
   statements <- many (try (do linebreak; parameterStatementParser))
-  return (AST ParameterBody "" $ statement1 : statements)
+  return $ ParameterBody placeholder $ statement1 : statements
 
-parameterStatementParser :: Parsec String () AST
-parameterStatementParser = do
-  definition <- parameterDefinitionParser
-  astNodes <- option [] parameterStatementRequiresParser
-  return (AST ParameterStatement "" (definition : astNodes))
+parameterStatementParser :: Parsec String () ParameterStatement
+parameterStatementParser =
+  try enumerationParser
+    <|> try blueprintUsageParser
+    <|> try generationParser
+    <|> blueprintParser
 
-parameterStatementRequiresParser :: Parsec String () [AST]
-parameterStatementRequiresParser = do
+enumerationParser :: Parsec String () ParameterStatement
+enumerationParser = do
+  enumPart1 <- enumerationPartParser
+  optionMaybe requiresParser
+  enumPart2 <- optionMaybe enumerationPartParser
+  return $
+    EnumerationStatement $
+      Enumeration
+        placeholder
+        enumPart1
+        enumPart2
+
+requiresParser :: Parsec String () ()
+requiresParser = do
   many1 (oneOf " \t")
   requires <- string "REQUIRES"
   many1 (oneOf " \t")
-  definition <- parameterDefinitionParser
-  let requiresNode = AST Requires requires []
-  return
-    [ AST Requires requires [],
-      definition
-    ]
+  return ()
 
-parameterDefinitionParser :: Parsec String () AST
-parameterDefinitionParser = do
+enumerationPartParser :: Parsec String () EnumerationPart
+enumerationPartParser = do
   identifier <- identifierParser
   char '('
-  information <- parameterInformationParser
+  valueList <- valueListParser
   char ')'
-  return
-    ( AST
-        ParameterDefinition
-        ""
-        [ identifier,
-          information
-        ]
-    )
+  return $
+    EnumerationPart
+      identifier
+      valueList
 
-parameterInformationParser :: Parsec String () AST
-parameterInformationParser = do
-  information <-
-    try enumerationParser
-      <|> try blueprintUsageParser
-      <|> try generationParser
-      <|> blueprintParser -- Reihenfolge wichtig
-  return (AST ParameterInformation "" [information])
+valueListParser :: Parsec String () [String]
+valueListParser =
+  try valuesParser <|> valuesWithCommaParser
 
-enumerationParser :: Parsec String () AST
-enumerationParser = do
-  values <- try valuesParser <|> valuesWithCommaParser
-  return (AST Enumeration "" values)
-
-valuesParser :: Parsec String () [AST]
+valuesParser :: Parsec String () [String]
 valuesParser = do
   sepBy1 valueParser (char ',')
 
-valueParser :: Parsec String () AST
+valueParser :: Parsec String () String
 valueParser = do
   many $ char ' '
   value <- many1 valueCharacterParser
   many $ char ' '
-  return $ AST Value value []
+  return value
 
-valuesWithCommaParser :: Parsec String () [AST]
+valuesWithCommaParser :: Parsec String () [String]
 valuesWithCommaParser = do
   sepBy1 valueWithCommaParser (char ';')
 
-valueWithCommaParser :: Parsec String () AST
+valueWithCommaParser :: Parsec String () String
 valueWithCommaParser = do
   optionalWhitespace
   char '{'
   value <- many1 anyParser
   char '}'
   optionalWhitespace
-  return (AST Value value [])
+  return value
 
-generationParser :: Parsec String () AST
+generationParser :: Parsec String () ParameterStatement
 generationParser = do
-  try $
-    generatorParser valueCharacterGenerationParser
-      <|> generatorWithCommaParser
-
-generatorParser :: Parsec String () Char -> Parsec String () AST
-generatorParser characterParser = do
-  firstArbitraryPart <- many characterParser
-  firstIdentifier <- identifierParser
-  secondArbitraryPart <- many characterParser
-  parts <- many $ generatorPartParser characterParser
-  let list =
-        [ AST ArbitraryPart firstArbitraryPart [],
-          firstIdentifier,
-          AST ArbitraryPart secondArbitraryPart []
-        ]
-          ++ concat parts
-  return $ AST Generation "" list
-
-generatorPartParser :: Parsec String () Char -> Parsec String () [AST]
-generatorPartParser characterParser = do
   identifier <- identifierParser
-  arbitraryPart <- many characterParser
-  return
-    [ identifier,
-      AST ArbitraryPart arbitraryPart []
-    ]
+  string "({"
+  mixed <- mixedParser (char '}')
+  string "})"
+  return $
+    GenerationStatement $
+      Generation
+        placeholder
+        identifier
+        mixed
 
-generatorWithCommaParser :: Parsec String () AST
-generatorWithCommaParser = do
-  char '{'
-  generator <- generatorParser anyParser
-  char '}'
-  return generator
-
-blueprintParser :: Parsec String () AST
+blueprintParser :: Parsec String () ParameterStatement
 blueprintParser = do
+  identifier <- identifierParser
+  char '('
   optionalWhitespace
   property <- firstPropertyParser
   optionalWhitespace
   properties <- many $ try furtherPropertyParser
-  ellipse <- option [] ellipseParser
-  return $ AST Blueprint "" ([property] ++ properties ++ ellipse)
+  ellipse <- try ellipseParser
+  char ')'
+  return $
+    BlueprintStatement $
+      Blueprint
+        placeholder
+        identifier
+        (property : properties)
+        ellipse
 
-firstPropertyParser :: Parsec String () AST
+firstPropertyParser :: Parsec String () Property
 firstPropertyParser = do
   char '@'
-  propertyName <- many1 upper
-  return $ AST Property propertyName []
+  many1 upper
 
-furtherPropertyParser :: Parsec String () AST
+furtherPropertyParser :: Parsec String () Property
 furtherPropertyParser = do
   char ','
   optionalWhitespace
@@ -222,129 +150,117 @@ furtherPropertyParser = do
   optionalWhitespace
   return property
 
-ellipseParser :: Parsec String () [AST]
+ellipseParser :: Parsec String () Bool
 ellipseParser = do
   char ','
   optionalWhitespace
   string "..."
   optionalWhitespace
-  return [AST Ellipse "..." []]
+  return True
 
-blueprintUsageParser :: Parsec String () AST
+blueprintUsageParser :: Parsec String () ParameterStatement
 blueprintUsageParser = do
-  optionalWhitespace
   identifier <- identifierParser
   char '('
-  enumeration <- enumerationParser
+  optionalWhitespace
+  blueprint <- identifierParser
+  char '('
+  valueList <- valueListParser
   char ')'
   optionalWhitespace
+  char ')'
   return $
-    AST
+    BlueprintUsageStatement $
       BlueprintUsage
-      ""
-      [ identifier,
-        enumeration
-      ]
+        placeholder
+        identifier
+        blueprint
+        valueList
 
--- Parameter Usage Parsers
+-- ** Parameter Usage
 
-parameterUsageParser :: Parsec String () AST
-parameterUsageParser = do
-  identifier <- identifierParser
-  propertyPart <- optionMaybe propertyPartParser
-  return $
-    AST
-      ParameterUsage
-      ""
-      ( case propertyPart of
-          Nothing -> [identifier]
-          Just x -> [identifier, x]
-      )
+parameterUsageParser :: Parsec String () ParameterUsage
+parameterUsageParser =
+  ParameterUsage
+    placeholder
+    <$> identifierParser
+    <*> optionMaybe propertyPartParser
 
-identifierParser :: Parsec String () AST
+identifierParser :: Parsec String () Identifier
 identifierParser = do
   dollar <- char '$'
-  identifier <- many1 upper
-  return (AST Identifier (dollar : identifier) [])
+  many1 upper
 
-propertyPartParser :: Parsec String () AST
+propertyPartParser :: Parsec String () PropertyPart
 propertyPartParser = do
   string "->"
   propertyName <- many1 (char '_' <|> upper)
   functionCallPart <- optionMaybe functionCallPartParser
   return $
-    AST
-      PropertyPart
-      propertyName
-      ( case functionCallPart of
-          Nothing -> []
-          Just x -> [x]
-      )
+    PropertyPart propertyName functionCallPart
 
-functionCallPartParser :: Parsec String () AST
+functionCallPartParser :: Parsec String () FunctionCallPart
 functionCallPartParser = do
   string "("
   argument <- many valueCharacterParser
   string ")"
-  return $ AST FunctionCallPart "" ([AST Argument argument [] | not (null argument)])
+  return [argument]
 
--- Other Section Parsers
+-- ** Other Sections
 
-taskSectionParser :: Parsec String () AST
+taskSectionParser :: Parsec String () TaskSection
 taskSectionParser = do
   many linebreak
   string "Aufgabenstellung:"
   optionalWhitespace
   linebreak
-  body <- bodyParser anyHeadline
+  body <- mixedParser anyHeadline
   linebreak
-  return $ AST TaskSection "" [body]
+  return $ TaskSection placeholder body
 
-solutionSectionParser :: Parsec String () AST
+solutionSectionParser :: Parsec String () SolutionSection
 solutionSectionParser = do
   many linebreak
   string "Lösung:"
   optionalWhitespace
   linebreak
-  body <- bodyParser anyHeadline
+  body <- mixedParser anyHeadline
   linebreak
-  return $ AST SolutionSection "" [body]
+  return $ SolutionSection placeholder body
 
-preAllocationSectionParser :: Parsec String () AST
+preAllocationSectionParser :: Parsec String () PreAllocationSection
 preAllocationSectionParser = do
   many linebreak
   string "Vorbelegung:"
   optionalWhitespace
   linebreak
-  body <- bodyParser anyHeadline
+  body <- mixedParser anyHeadline
   linebreak
-  return $ AST PreAllocationSection "" [body]
+  return $ PreAllocationSection placeholder body
 
-bodyParser :: Parsec String () a -> Parsec String () AST
-bodyParser bodyEndParser = do
-  elements <-
-    choice
-      [ bodyConstantFirstElements bodyEndParser,
-        bodyParameterFirstElements bodyEndParser
-      ]
-  return $ AST Body "" elements
+mixedParser :: Parsec String () a -> Parsec String () Mixed
+mixedParser mixedEndParser = do
+  choice
+    [ mixedConstantFirstElements mixedEndParser,
+      mixedParameterFirstElements mixedEndParser
+    ]
 
-bodyConstantFirstElements :: Parsec String () a -> Parsec String () [AST]
-bodyConstantFirstElements bodyEndParser = do
-  c1 <- constantParser bodyEndParser
+mixedConstantFirstElements :: Parsec String () a -> Parsec String () Mixed
+mixedConstantFirstElements mixedEndParser = do
+  c1 <- constantParser mixedEndParser
   elements <-
     many
       ( do
           parameterUsage <- parameterUsageParser
-          constant <- optionMaybe $ constantParser bodyEndParser
+          constant <- optionMaybe $ constantParser mixedEndParser
           case constant of
-            Nothing -> return [parameterUsage]
-            Just a -> return [parameterUsage, a]
+            Nothing -> return [ParameterPart parameterUsage]
+            Just a -> return [ParameterPart parameterUsage, a]
       )
   return (c1 : concat elements)
 
-bodyParameterFirstElements :: Parsec String () a -> Parsec String () [AST]
-bodyParameterFirstElements bodyEndParser = do
+mixedParameterFirstElements :: Parsec String () a -> Parsec String () Mixed
+mixedParameterFirstElements bodyEndParser = do
   p1 <- parameterUsageParser
   elements <-
     many
@@ -353,14 +269,14 @@ bodyParameterFirstElements bodyEndParser = do
           parameterUsage <- optionMaybe parameterUsageParser
           case parameterUsage of
             Nothing -> return [constant]
-            Just a -> return [constant, a]
+            Just a -> return [constant, ParameterPart a]
       )
-  return (p1 : concat elements)
+  return (ParameterPart p1 : concat elements)
 
-constantParser :: Parsec String () a -> Parsec String () AST
+constantParser :: Parsec String () a -> Parsec String () MixedPart
 constantParser endParser = do
   c <- manyTill anyChar $ lookAhead $ dollarOr endParser
-  return $ AST Constant c []
+  return $ ConstantPart c
 
 dollarOr :: Parsec String () a -> Parsec String () [Char]
 dollarOr end = do
@@ -376,9 +292,7 @@ anyHeadline = do
     <|> try (string "Tests:")
     <|> string "Parameter:"
 
--- Test Section Parsers
-
-testSectionParser :: Parsec String () AST
+testSectionParser :: Parsec String () TestSection
 testSectionParser = do
   many linebreak
   string "Tests:"
@@ -386,26 +300,19 @@ testSectionParser = do
   linebreak
   testBody <- testBodyParser
   eof
-  return $ AST TestSection "" [testBody]
+  return $ TestSection placeholder testBody
 
-testBodyParser :: Parsec String () AST
+testBodyParser :: Parsec String () TestBody
 testBodyParser = do
-  cases <- many testCaseParser
-  return $ AST TestBody "" cases
+  many testCaseParser
 
-testCaseParser :: Parsec String () AST
-testCaseParser = do
-  caseBody <- bodyParser testOutcomeParser
-  outcome <- testOutcomeParser
-  return $
-    AST
-      TestCase
-      ""
-      [ AST TestCode (value caseBody) (children caseBody), -- Body zu TestCode umbenennen
-        outcome
-      ]
+testCaseParser :: Parsec String () TestCase
+testCaseParser =
+  TestCase placeholder
+    <$> mixedParser testOutcomeParser
+    <*> testOutcomeParser
 
-testOutcomeParser :: Parsec String () AST
+testOutcomeParser :: Parsec String () TestOutcome
 testOutcomeParser = do
   linebreak
   string "Expected Outcome:"
@@ -413,9 +320,9 @@ testOutcomeParser = do
   outcome <- many1 valueCharacterParser -- hier fehlt noch ParameterUsage (siehe EBNF)
   optionalWhitespace
   optional $ many linebreak
-  return $ AST TestOutcome outcome []
+  return $ ConstantOutcome outcome
 
--- Character Parsers
+-- ** Characters
 
 valueCharacterParser :: Parsec String () Char
 valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
