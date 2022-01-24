@@ -72,7 +72,7 @@ analyzeEnumeration (Enumeration _ part1 mPart2) = do
   enumInfoWithRules <- (case maybeReqPart of
         Nothing -> Right enumInfo1
         Just (id, enumInfo) -> enrichWithRules enumInfo1 id enumInfo)
-  let evList = (id1, enumInfo1) : maybeToList maybeReqPart
+  let evList = [(id1, enumInfoWithRules)]
   let evMap = Map.fromList evList
   let m = Map.map ST.EnumerationSymbol evMap
   let g = buildGraphFromEnumInfo id1 enumInfoWithRules
