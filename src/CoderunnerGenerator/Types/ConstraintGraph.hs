@@ -6,6 +6,7 @@ module CoderunnerGenerator.Types.ConstraintGraph
     ConstraintGraph,
     Edge,
     parameter,
+    value,
     values,
     edges,
     merge,

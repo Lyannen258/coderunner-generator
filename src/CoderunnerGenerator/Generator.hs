@@ -13,15 +13,21 @@ import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
 
-generateOutput :: Template -> SymbolTable -> InteractionResult -> FilePath -> Either String String
-generateOutput t st vt filePath = do
-  let task = view (taskSection . body) t
-  let sol = view (solutionSection . body) t
-  let pre = view (preAllocationSection . body) t
+generateOutputs :: Template -> SymbolTable -> String -> [ValueTable] -> [Either String String]
+generateOutputs ast st name = foldr folder []
+  where
+    folder vt acc = 
+      let nameNumber = name ++ (show . (+1) . length) acc
+      in generateOutput ast st nameNumber vt : acc
+
+generateOutput :: Template -> SymbolTable -> String -> ValueTable -> Either String String
+generateOutput ast st name vt = do
+  let task = view (taskSection . body) ast
+  let sol = view (solutionSection . body) ast
+  let pre = view (preAllocationSection . body) ast
   taskGen <- generateBody task st vt
   solGen <- generateBody sol st vt
   preGen <- generateBody pre st vt
-  let nameGen = takeBaseName filePath
   -- let solTemp = createSolutionTemplate preGen "modulo"
   let ret = intercalate "\n\n" [taskGen, solGen, preGen]
   let xmlDoc =
@@ -32,7 +38,7 @@ generateOutput t st vt filePath = do
                 (unqual "question")
                 [ node
                     (unqual "name")
-                    ( node (unqual "text") (CData CDataText nameGen Nothing)
+                    ( node (unqual "text") (CData CDataText name Nothing)
                     ),
                   node
                     (unqual "questiontext")
@@ -74,8 +80,8 @@ generateOutput t st vt filePath = do
 --createSolutionTemplate haystack needle = strReplace needle "solution" haystack
 -- Perhapts using Regex-> Text.Regex subRegex sieht da ganz gut aus.
 
-generateBody :: Mixed -> SymbolTable -> InteractionResult -> Either String String
-generateBody m st ir = do
+generateBody :: Mixed -> SymbolTable -> ValueTable -> Either String String
+generateBody m st vt = do
   foldM folder "" m
   where
     folder :: String -> MixedPart -> Either String String
@@ -85,8 +91,8 @@ generateBody m st ir = do
       let id = view identifier pu
       code <-
         ( case maybepp of
-            Nothing -> getIrSingleValue id ir
-            Just pp -> evaluateWithPropertyPart id pp st ir
+            Nothing -> getSingleValue id vt
+            Just pp -> evaluateWithPropertyPart id pp st vt
           )
       return $ str ++ code
 
@@ -94,9 +100,9 @@ evaluateWithPropertyPart ::
   Identifier ->
   PropertyPart ->
   SymbolTable ->
-  InteractionResult ->
+  ValueTable ->
   Either String String
-evaluateWithPropertyPart id pp st ir = do
+evaluateWithPropertyPart id pp st vt = do
   symbolInfo <- maybeToEither (M.lookup id st) ("No symbol found for identifier: '" ++ id ++ "'")
   case symbolInfo of
     BlueprintUsageSymbol b -> evaluateBlueprintProp id b pp

@@ -3,9 +3,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module CoderunnerGenerator.Interaction.Linux
-  ( InteractionResult,
-    getIrSingleValue,
-    getIrValues,
+  ( InteractionResult (ValueResult, AmountResult),
+    ValueTable,
+    getSingleValue,
+    getValues,
     questionUser,
   )
 where
@@ -13,9 +14,12 @@ where
 import Brick
 import Brick.Main (defaultMain)
 import Brick.Widgets.Border
+import CoderunnerGenerator.Helper (maybeToEither)
+import qualified CoderunnerGenerator.Helper as H
 import qualified CoderunnerGenerator.Types.ConfigurationState as CS
 import CoderunnerGenerator.Types.ConstraintGraph (ConstraintGraph, Edge, Value)
 import qualified CoderunnerGenerator.Types.ConstraintGraph as G
+import CoderunnerGenerator.Types.SymbolTable (SymbolInformation (EnumerationSymbol), SymbolTable)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Data.Foldable (Foldable (toList))
@@ -29,11 +33,9 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Graphics.Vty.Attributes
 import Graphics.Vty.Input.Events
-import qualified CoderunnerGenerator.Helper as H
 import Lens.Micro
 import Lens.Micro.Internal (Each)
 import Lens.Micro.TH
-import CoderunnerGenerator.Types.SymbolTable (SymbolInformation (EnumerationSymbol), SymbolTable)
 
 -- Internal stuff to make each work with sequence
 
@@ -279,9 +281,10 @@ chooseParameterStep state =
     currentValue = splitOn "," $ currentItemIdentifier state
     state'' =
       if state ^. currentParameter /= ""
-        then state' 
-          & over configs (CS.set (state ^. currentParameter) currentValue)
-          & over valueTable (M.insert (state ^. currentParameter) currentValue )
+        then
+          state'
+            & over configs (CS.set (state ^. currentParameter) currentValue)
+            & over valueTable (M.insert (state ^. currentParameter) currentValue)
         else state'
     parameters = (fromList . S.toList . G.parameters) (state ^. graph)
     parametersUI = fmap f parameters
@@ -291,9 +294,10 @@ chooseParameterStep state =
             isSet = p `M.member` (state'' ^. valueTable)
             value = (state'' ^. valueTable) M.! p
             valueVis = intercalate "," value
-            vis = if isSet
-              then p ++ " (" ++ valueVis ++ ")"
-              else p
+            vis =
+              if isSet
+                then p ++ " (" ++ valueVis ++ ")"
+                else p
     state''' = state'' & set (ui . values) parametersUI
 
 chooseValueForParameterStep :: State -> EventM n (Next State)
@@ -313,11 +317,19 @@ chooseValueForParameterStep state =
 
 -- Interface
 
-getIrValues :: String -> InteractionResult -> Either String [String]
-getIrValues k vt = Right ["Hello"]
+getValues :: String -> ValueTable -> Either String [String]
+getValues k vt =
+  maybeToEither
+    (M.lookup k vt)
+    ("Identifier " ++ k ++ " is unknown.")
 
-getIrSingleValue :: String -> InteractionResult -> Either String String
-getIrSingleValue k vt = Right "Hello"
+getSingleValue :: String -> ValueTable -> Either String String
+getSingleValue k vt = value
+  where
+    maybeValues = M.lookup k vt
+    value = case maybeValues of
+      Nothing -> Left $ "Identifier " ++ k ++ " is unkonwn."
+      Just vs -> Right $ head vs
 
 questionUser :: (SymbolTable, ConstraintGraph) -> ExceptT String IO InteractionResult
 questionUser semResult = do
