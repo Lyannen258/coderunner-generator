@@ -6,7 +6,8 @@ import Options.Applicative
 
 data Args = Args
   { templateFile :: String,
-    amount :: Maybe Int
+    amount :: Maybe Int,
+    debugOutput :: Bool
   }
   deriving (Show)
 
@@ -22,6 +23,7 @@ parser =
   Args
     <$> templateFileParser
     <*> optional amountParser
+    <*> debugParser
 
 templateFileParser :: Parser String
 templateFileParser =
@@ -34,6 +36,13 @@ amountParser =
   option auto $
     long "amount"
       <> short 'a'
+
+debugParser :: Parser Bool
+debugParser =
+  switch $
+    long "debug"
+    <> short 'd'
+
 
 -- * Execution function
 

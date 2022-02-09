@@ -11,7 +11,7 @@ import qualified CoderunnerGenerator.SemanticAnalyzer as SA
 import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
 import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
 import qualified CoderunnerGenerator.Types.SymbolTable as ST
-import Control.Monad (sequence, foldM_)
+import Control.Monad (foldM_, sequence, when)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Map (Map)
 import Data.Text.Lazy (unpack)
@@ -32,6 +32,7 @@ analyzeFile :: Args -> IO ()
 analyzeFile args = do
   let filePath = CmdArgs.templateFile args
   let amount = CmdArgs.amount args
+  let debug = CmdArgs.debugOutput args
   let name = takeBaseName filePath
 
   fileContent <- readFileContent filePath
@@ -39,10 +40,10 @@ analyzeFile args = do
   createOutputDirectory filePath
 
   let parseResult = parseString fileContent
-  writeParseResult filePath parseResult
+  when debug $ writeParseResult filePath parseResult
 
   let semanticResult = parseToSemantic parseResult >>= SA.semanticAnalysis
-  writeSemanticResult filePath semanticResult
+  when debug $ writeSemanticResult filePath semanticResult
 
   valueResult <- case semanticResult of
     Right sr -> getValueTables amount sr
@@ -78,11 +79,12 @@ getValueTables Nothing sr = do
 
 -- | Generate the coderunner exercises. Uses all intermediate results
 -- (Parser, SemanticAnalyzer, Interaction/ValueTable)
-getFinalResult :: Either ParseError AST.Template
-  -> Either String (ST.SymbolTable, b)
-  -> Either String [ValueTable]
-  -> String
-  -> Either String [String]
+getFinalResult ::
+  Either ParseError AST.Template ->
+  Either String (ST.SymbolTable, b) ->
+  Either String [ValueTable] ->
+  String ->
+  Either String [String]
 getFinalResult parseResult semanticResult valueResult name = do
   ast <- parseToSemantic parseResult
   st <- semanticResult
@@ -122,11 +124,11 @@ writeFinalResult :: String -> Either String [String] -> IO ()
 writeFinalResult filePath (Right results) = foldM_ writeSingleResult 1 (reverse results) -- reverse because foldM_ works in the wrong direction
   where
     writeSingleResult counter result = do
-            writeToFile
-              filePath
-              ("/Res_" ++ show counter ++ ".xml")
-              result 
-            return (counter + 1)
+      writeToFile
+        filePath
+        ("/Res_" ++ show counter ++ ".xml")
+        result
+      return (counter + 1)
 writeFinalResult filePath (Left error) = writeToFile filePath "/Res.xml" error
 
 -- * Helper
