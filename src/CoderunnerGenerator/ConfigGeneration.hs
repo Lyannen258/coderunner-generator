@@ -42,5 +42,5 @@ getNDistinct amountNumbers amountConfigs = fillToN []
     fillToN acc std
       | length (nub acc) >= min amountNumbers amountConfigs = nub acc
       | otherwise =
-        let (rand, newGen) = uniformR (0, amountConfigs) std
+        let (rand, newGen) = uniformR (0, amountConfigs - 1) std
          in fillToN (rand : acc) newGen
