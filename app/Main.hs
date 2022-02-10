@@ -11,6 +11,7 @@ import qualified CoderunnerGenerator.SemanticAnalyzer as SA
 import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
 import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
 import qualified CoderunnerGenerator.Types.SymbolTable as ST
+import Control.Exception (SomeException, try)
 import Control.Monad (foldM_, sequence, when)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Map (Map)
@@ -20,11 +21,11 @@ import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
 import System.IO
-import Text.Parsec
+import Text.Parsec (ParseError, parse)
 import Text.Pretty.Simple (pPrint, pShowNoColor)
 
 main :: IO ()
-main = do
+main = handleErrors $ do
   args <- CmdArgs.executeParser
   analyzeFile args
 
@@ -144,3 +145,14 @@ writeToFile inputFilePath fileName output = do
   hSetEncoding outputHandle utf8
   hPutStr outputHandle output
   hClose outputHandle
+
+-- * Error handling
+
+handleErrors :: IO () -> IO ()
+handleErrors action = do
+  res <- resIO
+  case res of
+    Left e -> print $ show e
+    _ -> return ()
+  where
+    resIO = try action :: IO (Either SomeException ())
