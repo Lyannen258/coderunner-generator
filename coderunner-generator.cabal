@@ -44,7 +44,7 @@ library
 
   build-depends:
     base >= 4,
-    parsec >= 3.1.2,
+    megaparsec,
     xml,
     containers,
     filepath,
@@ -71,7 +71,7 @@ executable coderunner-generator
     -- other-extensions:
   build-depends:
     base >= 4,
-    parsec >= 3.1.2,
+    megaparsec,
     xml,
     containers,
     filepath,

@@ -17,11 +17,12 @@ import Control.Monad.Trans.Except (runExceptT)
 import Data.Map (Map)
 import Data.Text.Lazy (unpack)
 import Data.Tree (drawTree)
+import Data.Void (Void)
 import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
 import System.IO
-import Text.Parsec (ParseError, parse)
+import Text.Megaparsec (ParseErrorBundle, errorBundlePretty, parse)
 import Text.Pretty.Simple (pPrint, pShowNoColor)
 
 main :: IO ()
@@ -81,7 +82,7 @@ getValueTables Nothing sr = do
 -- | Generate the coderunner exercises. Uses all intermediate results
 -- (Parser, SemanticAnalyzer, Interaction/ValueTable)
 getFinalResult ::
-  Either ParseError AST.Template ->
+  Either (ParseErrorBundle String Void) AST.Template ->
   Either String (ST.SymbolTable, b) ->
   Either String [ValueTable] ->
   String ->
@@ -94,19 +95,19 @@ getFinalResult parseResult semanticResult valueResult name = do
 
 -- * Parse Functions
 
-writeParseResult :: String -> Either ParseError AST.Template -> IO ()
+writeParseResult :: String -> Either (ParseErrorBundle String Void) AST.Template -> IO ()
 writeParseResult filePath parseResult = do
   writeToFile
     filePath
     "/AST.txt"
     (parseResultToString parseResult)
 
-parseString :: String -> Either ParseError AST.Template
+parseString :: String -> Either (ParseErrorBundle String Void) AST.Template
 parseString = parse coderunnerParser ""
 
-parseResultToString :: Either ParseError AST.Template -> String
+parseResultToString :: Either (ParseErrorBundle String Void) AST.Template -> String
 parseResultToString parseResult = case parseResult of
-  Left a -> unpack $ pShowNoColor a
+  Left a -> errorBundlePretty a
   Right b -> unpack $ pShowNoColor b
 
 -- * Semantic Analysis Functions
@@ -134,7 +135,7 @@ writeFinalResult filePath (Left error) = writeToFile filePath "/Res.xml" error
 
 -- * Helper
 
-parseToSemantic :: Either ParseError a -> Either String a
+parseToSemantic :: Either (ParseErrorBundle String Void) a -> Either String a
 parseToSemantic (Left error) = Left "Error while Parsing"
 parseToSemantic (Right a) = Right a
 

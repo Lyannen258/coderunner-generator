@@ -11,12 +11,18 @@
 module CoderunnerGenerator.Parser where
 
 import CoderunnerGenerator.Types.AbstractSyntaxTree
-import Text.Parsec
+import Data.Void (Void)
+import Text.Megaparsec
+import Text.Megaparsec.Char
+
+-- * Parser type
+
+type Parser = Parsec Void String
 
 -- * Main Parser
 
 -- | The main parser for a template file
-coderunnerParser :: Parsec String () Template
+coderunnerParser :: Parser Template
 coderunnerParser =
   Template
     placeholder
@@ -29,30 +35,30 @@ coderunnerParser =
 -- ** Parameter Section
 
 -- | Parser for the parameter section of a template
-parameterSectionParser :: Parsec String () ParameterSection
+parameterSectionParser :: Parser ParameterSection
 parameterSectionParser = do
   headline <- string "Parameter:"
   linebreak
   ParameterSection placeholder <$> parameterBodyParser
 
-parameterBodyParser :: Parsec String () ParameterBody
+parameterBodyParser :: Parser ParameterBody
 parameterBodyParser = do
   statement1 <- parameterStatementParser
   statements <- many (try (do linebreak; parameterStatementParser))
   return $ ParameterBody placeholder $ statement1 : statements
 
-parameterStatementParser :: Parsec String () ParameterStatement
+parameterStatementParser :: Parser ParameterStatement
 parameterStatementParser =
   try enumerationParser
     <|> try blueprintUsageParser
     <|> try generationParser
     <|> blueprintParser
 
-enumerationParser :: Parsec String () ParameterStatement
+enumerationParser :: Parser ParameterStatement
 enumerationParser = do
   enumPart1 <- enumerationPartParser
-  optionMaybe requiresParser
-  enumPart2 <- optionMaybe enumerationPartParser
+  optional requiresParser
+  enumPart2 <- optional enumerationPartParser
   return $
     EnumerationStatement $
       Enumeration
@@ -60,14 +66,14 @@ enumerationParser = do
         enumPart1
         enumPart2
 
-requiresParser :: Parsec String () ()
+requiresParser :: Parser ()
 requiresParser = do
-  many1 (oneOf " \t")
+  some (oneOf " \t")
   requires <- string "REQUIRES"
-  many1 (oneOf " \t")
+  some (oneOf " \t")
   return ()
 
-enumerationPartParser :: Parsec String () EnumerationPart
+enumerationPartParser :: Parser EnumerationPart
 enumerationPartParser = do
   identifier <- identifierParser
   char '('
@@ -78,35 +84,35 @@ enumerationPartParser = do
       identifier
       valueList
 
-valueListParser :: Parsec String () [String]
+valueListParser :: Parser [String]
 valueListParser =
   try valuesParser <|> valuesWithCommaParser
 
-valuesParser :: Parsec String () [String]
+valuesParser :: Parser [String]
 valuesParser = do
   sepBy1 valueParser (char ',')
 
-valueParser :: Parsec String () String
+valueParser :: Parser String
 valueParser = do
   many $ char ' '
-  value <- many1 valueCharacterParser
+  value <- some valueCharacterParser
   many $ char ' '
   return value
 
-valuesWithCommaParser :: Parsec String () [String]
+valuesWithCommaParser :: Parser [String]
 valuesWithCommaParser = do
   sepBy1 valueWithCommaParser (char ';')
 
-valueWithCommaParser :: Parsec String () String
+valueWithCommaParser :: Parser String
 valueWithCommaParser = do
   optionalWhitespace
   char '{'
-  value <- many1 anyParser
+  value <- some anyParser
   char '}'
   optionalWhitespace
   return value
 
-generationParser :: Parsec String () ParameterStatement
+generationParser :: Parser ParameterStatement
 generationParser = do
   identifier <- identifierParser
   string "({"
@@ -119,7 +125,7 @@ generationParser = do
         identifier
         mixed
 
-blueprintParser :: Parsec String () ParameterStatement
+blueprintParser :: Parser ParameterStatement
 blueprintParser = do
   identifier <- identifierParser
   char '('
@@ -137,12 +143,12 @@ blueprintParser = do
         (property : properties)
         ellipse
 
-firstPropertyParser :: Parsec String () Property
+firstPropertyParser :: Parser Property
 firstPropertyParser = do
   char '@'
-  many1 upper
+  some upperChar
 
-furtherPropertyParser :: Parsec String () Property
+furtherPropertyParser :: Parser Property
 furtherPropertyParser = do
   char ','
   optionalWhitespace
@@ -150,7 +156,7 @@ furtherPropertyParser = do
   optionalWhitespace
   return property
 
-ellipseParser :: Parsec String () Bool
+ellipseParser :: Parser Bool
 ellipseParser = do
   char ','
   optionalWhitespace
@@ -158,7 +164,7 @@ ellipseParser = do
   optionalWhitespace
   return True
 
-blueprintUsageParser :: Parsec String () ParameterStatement
+blueprintUsageParser :: Parser ParameterStatement
 blueprintUsageParser = do
   identifier <- identifierParser
   char '('
@@ -179,27 +185,27 @@ blueprintUsageParser = do
 
 -- ** Parameter Usage
 
-parameterUsageParser :: Parsec String () ParameterUsage
+parameterUsageParser :: Parser ParameterUsage
 parameterUsageParser =
   ParameterUsage
     placeholder
     <$> identifierParser
-    <*> optionMaybe propertyPartParser
+    <*> optional propertyPartParser
 
-identifierParser :: Parsec String () Identifier
+identifierParser :: Parser Identifier
 identifierParser = do
   dollar <- char '$'
-  many1 upper
+  some upperChar
 
-propertyPartParser :: Parsec String () PropertyPart
+propertyPartParser :: Parser PropertyPart
 propertyPartParser = do
   string "->"
-  propertyName <- many1 (char '_' <|> upper)
-  functionCallPart <- optionMaybe functionCallPartParser
+  propertyName <- some (char '_' <|> upperChar)
+  functionCallPart <- optional functionCallPartParser
   return $
     PropertyPart propertyName functionCallPart
 
-functionCallPartParser :: Parsec String () FunctionCallPart
+functionCallPartParser :: Parser FunctionCallPart
 functionCallPartParser = do
   string "("
   argument <- many valueCharacterParser
@@ -208,7 +214,7 @@ functionCallPartParser = do
 
 -- ** Other Sections
 
-taskSectionParser :: Parsec String () TaskSection
+taskSectionParser :: Parser TaskSection
 taskSectionParser = do
   many linebreak
   string "Aufgabenstellung:"
@@ -218,7 +224,7 @@ taskSectionParser = do
   linebreak
   return $ TaskSection placeholder body
 
-solutionSectionParser :: Parsec String () SolutionSection
+solutionSectionParser :: Parser SolutionSection
 solutionSectionParser = do
   many linebreak
   string "Lösung:"
@@ -228,7 +234,7 @@ solutionSectionParser = do
   linebreak
   return $ SolutionSection placeholder body
 
-preAllocationSectionParser :: Parsec String () PreAllocationSection
+preAllocationSectionParser :: Parser PreAllocationSection
 preAllocationSectionParser = do
   many linebreak
   string "Vorbelegung:"
@@ -238,52 +244,52 @@ preAllocationSectionParser = do
   linebreak
   return $ PreAllocationSection placeholder body
 
-mixedParser :: Parsec String () a -> Parsec String () Mixed
+mixedParser :: Parser a -> Parser Mixed
 mixedParser mixedEndParser = do
   choice
     [ mixedConstantFirstElements mixedEndParser,
       mixedParameterFirstElements mixedEndParser
     ]
 
-mixedConstantFirstElements :: Parsec String () a -> Parsec String () Mixed
+mixedConstantFirstElements :: Parser a -> Parser Mixed
 mixedConstantFirstElements mixedEndParser = do
   c1 <- constantParser mixedEndParser
   elements <-
     many
       ( do
           parameterUsage <- parameterUsageParser
-          constant <- optionMaybe $ constantParser mixedEndParser
+          constant <- optional $ constantParser mixedEndParser
           case constant of
             Nothing -> return [ParameterPart parameterUsage]
             Just a -> return [ParameterPart parameterUsage, a]
       )
   return (c1 : concat elements)
 
-mixedParameterFirstElements :: Parsec String () a -> Parsec String () Mixed
+mixedParameterFirstElements :: Parser a -> Parser Mixed
 mixedParameterFirstElements bodyEndParser = do
   p1 <- parameterUsageParser
   elements <-
     many
       ( do
           constant <- constantParser bodyEndParser
-          parameterUsage <- optionMaybe parameterUsageParser
+          parameterUsage <- optional parameterUsageParser
           case parameterUsage of
             Nothing -> return [constant]
             Just a -> return [constant, ParameterPart a]
       )
   return (ParameterPart p1 : concat elements)
 
-constantParser :: Parsec String () a -> Parsec String () MixedPart
+constantParser :: Parser a -> Parser MixedPart
 constantParser endParser = do
-  c <- manyTill anyChar $ lookAhead $ dollarOr endParser
+  c <- manyTill (printChar <|> spaceChar) $ lookAhead $ dollarOr endParser
   return $ ConstantPart c
 
-dollarOr :: Parsec String () a -> Parsec String () [Char]
+dollarOr :: Parser a -> Parser [Char]
 dollarOr end = do
   try (string "$")
     <|> try (do end; return "")
 
-anyHeadline :: Parsec String () [Char]
+anyHeadline :: Parser [Char]
 anyHeadline = do
   linebreak
   try (string "Aufgabenstellung:")
@@ -292,7 +298,7 @@ anyHeadline = do
     <|> try (string "Tests:")
     <|> string "Parameter:"
 
-testSectionParser :: Parsec String () TestSection
+testSectionParser :: Parser TestSection
 testSectionParser = do
   many linebreak
   string "Tests:"
@@ -302,39 +308,39 @@ testSectionParser = do
   eof
   return $ TestSection placeholder testBody
 
-testBodyParser :: Parsec String () TestBody
+testBodyParser :: Parser TestBody
 testBodyParser = do
   many testCaseParser
 
-testCaseParser :: Parsec String () TestCase
+testCaseParser :: Parser TestCase
 testCaseParser =
   TestCase placeholder
     <$> mixedParser testOutcomeParser
     <*> testOutcomeParser
 
-testOutcomeParser :: Parsec String () TestOutcome
+testOutcomeParser :: Parser TestOutcome
 testOutcomeParser = do
   linebreak
   string "Expected Outcome:"
   optionalWhitespace
-  outcome <- many1 valueCharacterParser -- hier fehlt noch ParameterUsage (siehe EBNF)
+  outcome <- some valueCharacterParser -- hier fehlt noch ParameterUsage (siehe EBNF)
   optionalWhitespace
   optional $ many linebreak
   return $ ConstantOutcome outcome
 
 -- ** Characters
 
-valueCharacterParser :: Parsec String () Char
-valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letter <|> digit
+valueCharacterParser :: Parser Char
+valueCharacterParser = do oneOf "!^°§%&/=?`´*+#'-.<>" <|> letterChar <|> digitChar
 
-valueCharacterGenerationParser :: Parsec String () Char
+valueCharacterGenerationParser :: Parser Char
 valueCharacterGenerationParser = do char ' ' <|> valueCharacterParser
 
-anyParser :: Parsec String () Char
+anyParser :: Parser Char
 anyParser = do noneOf "${}"
 
-linebreak :: Parsec String () Char
-linebreak = do try newline <|> crlf
+linebreak :: Parser [Char]
+linebreak = do eol
 
-optionalWhitespace :: Parsec String () String
+optionalWhitespace :: Parser String
 optionalWhitespace = do many (oneOf " \t")
