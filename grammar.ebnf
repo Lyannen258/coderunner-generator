@@ -1,70 +1,40 @@
-Template = ParameterSection, TaskSection, SolutionSection, PreAllocationSection, TestSection; (* Every order is valid as long as all of the listed sections are present *)
+
+Template = ParameterSection, {OtherSection} (* Every other section defined in the configuration needs to be there, or maybe it could be possible, to have optional and mandatory sections*)
+
+ParameterSection = {ParameterHeadline, ParameterBody};
+
+ParameterBody = ParameterStatement {, ParameterStatement};
+
+ParameterStatement = ParameterPart, [Requires, ParameterPart]
+
+ParameterPart = Identifier, "(", ValueList, ")"
+ValueList = Value {, Value}
+Value = "\"", {StringChar | IdentifierUsage}, "\"" (* Vielleicht kann man auch noch eine richtige ParameterUsage hier nutzen *)
+
+IdentifierUsage = "{{", Identifier, "}}"
+
+Output = "{{", (ParameterUsage | StringOutput), "}}"
+ParameterUsage = Identifier [, CallPart],
+CallPart = ".", Identifier, "(", Args, ")"
+Args = [Argument, {",", Argument}]
+Argument = ArgChar, {ArgChar}
+StringOutput = "\"", StringChar, "\""
 
 
-(* Parameter Section Definitions *)
+OtherSection = OtherHeadline, {BodyChar | Output | BlockComment} (* Eats up every succeeding whitespace *)
 
-ParameterSection = ParameterHeadline, NEWLINE, ParameterBody;
-ParameterHeadline = "Parameter:";
-ParameterBody = ParameterStatement, {NEWLINE, ParameterStatement};
+BlockComment = "{#", BodyChar, "#}" 
 
-ParameterStatement = EnumerationStatement | GenerationStatement | BlueprintStatement | BlueprintUsageStatement
+ParameterHeadline = "Parameter:", NEWLINE;
 
-EnumerationStatement = EnumerationPart, [WHITESPACE, Requires, WHITESPACE, EnumerationPart];
-EnumerationPart = Identifier, "(", ValueList, ")"
-ValueList = Values | ValuesWithComma;
-Values = ANY_WO_COMMA {",", ANY_WO_COMMA};
-ValuesWithComma = ValueWithComma, {";", ValueWithComma}; (* and with spaces *)
-ValueWithComma = OPT_WS, "{", ANY, "}", OPT_WS;
-Requires = "REQUIRES";
+OtherHeadline = ? Every Headline, that was specified in the Configuration (ParserConfig) ?, ":", NEWLINE
 
-GenerationStatement = Identifier, "({", Mixed, "})"
+Requires = "requires"
 
-BlueprintStatement = Identifier, "(", BlueprintArguments, ")"
-BlueprintArguments = OPT_WS ,Property, OPT_WS, {",", OPT_WS, Property, OPT_WS}, {",", OPT_WS, Ellipse, OPT_WS};
-Property = "@", CAP_WORD;
-Ellipse = "...";
+Identifier = ? Any number of alphabetic Unicode characters, no spaces ?
 
-BlueprintUsageStatement = Identifier, "(", OPT_WS, Identifier, "(", ValueList, ")", OPT_WS, ")";
+ArgChar = ? Any alphabetic or numeric Unicode character, no spaces?
 
+StringChar = ? Any Unicode character, with escape sequence for double quotes ?
 
-(* Parameter Usage Definitions *)
-
-ParameterUsage = Identifier, {PropertyPart};
-Identifier = "$", CAP_WORD;
-PropertyPart = "->", CAP_WORD, {FunctionCallPart};
-FunctionCallPart = "(", {Argument}, ")";
-Argument = ANY_WO_COMMA;
-
-
-(* Other Section Definitions *)
-
-TaskSection = "Aufgabenstellung:", NEWLINE, Mixed, NEWLINE;
-SolutionSection = "Lösung:", NEWLINE, Mixed, NEWLINE;
-PreAllocationSection = "Vorbelegung:", NEWLINE, Mixed, NEWLINE;
-
-Mixed = (Constant, {ParameterUsage, [Constant]})
-    | (ParameterUsage, {Constant [ParameterUsage]}); (* Mixed content of Constants and ParameterUsage *)
-Constant = ANY; (* nicht ganz korrekt, geschweifte Klammern möglich *)
-
-TestSection = "Test:", NEWLINE, TestBody, NEWLINE;
-TestBody = {TestCase};
-TestCase = TestCode, TestOutcome;
-TestCode = Mixed;
-TestOutcome = NEWLINE, "Expected Outcome:", OPT_WS, ({CHAR | DIGIT | SPECIAL} | ParameterUsage), OPT_WS;
-
-
-(* Character Definitions *)
-
-WHITESPACE = ? any white space character ?;
-NEWLINE = ? new line character ?;
-CHAR = ? lowercase or uppercase word character ?;
-DIGIT = ? any digit ?;
-SPECIAL = ? any special character without ${} ?;
-UPPERCHAR = ? uppercase word character ?;
-ANY = CHAR | DIGIT | SPECIAL | WHITESPACE;
-ANY_WO_COMMA = ? like ANY but without ,?;
-
-WORD = CHAR, {CHAR};
-OPT_WS = {WHITESPACE}; (* optional whitespace *)
-WS_WORD = OPT_WS, WORD, OPT_WS;
-CAP_WORD = UPPERCHAR, {UPPERCHAR};
+BodyChar = ? Like StringChar, but no escape sequences ? (* Block comment can be escaped with {{ "{#" }} *)
