@@ -35,10 +35,7 @@ placeholder = Position 0 0 0 0
 data Template = Template
   { templatePosition :: Position,
     templateParameterSection :: ParameterSection,
-    templateTaskSection :: TaskSection,
-    templateSolutionSection :: SolutionSection,
-    templatePreAllocationSection :: PreAllocationSection,
-    templateTestSection :: TestSection
+    templateOtherSections :: [Section]
   }
   deriving (Show)
 
@@ -58,69 +55,45 @@ data ParameterBody = ParameterBody
   }
   deriving (Show)
 
--- | Represents a parameter statement
-data ParameterStatement
-  = EnumerationStatement Enumeration
-  | GenerationStatement Generation
-  | BlueprintStatement Blueprint
-  | BlueprintUsageStatement BlueprintUsage
-  deriving (Show)
-
 -- | Represents an enumeration statement
-data Enumeration = Enumeration
-  { enumerationPosition :: Position,
-    enumerationMain :: EnumerationPart,
-    enumerationRequires :: Maybe EnumerationPart
+data ParameterStatement = ParameterStatement
+  { parameterStatementPosition :: Position,
+    parameterStatementMain :: ParameterPart,
+    parameterStatementRequires :: Maybe ParameterPart
   }
   deriving (Show)
 
 -- | Represents an enumeration part
 --
 -- Consists of an identifier and a value list
-data EnumerationPart = EnumerationPart
-  { enumerationPartIdentifier :: Identifier,
-    enumerationPartValues :: [String]
+data ParameterPart = ParameterPart
+  { parameterPartIdentifier :: Identifier,
+    parameterPartValues :: [ParameterValue]
   }
   deriving (Show)
 
--- | Represents a generation statement
-data Generation = Generation
-  { generationPosition :: Position,
-    generationIdentifier :: Identifier,
-    generationBody :: Mixed
-  }
+-- | Represents a Parameter Value
+--
+-- Consists of a list of parameter parts
+newtype ParameterValue = ParameterValue [ParameterValuePart]
   deriving (Show)
 
--- | Represents a blueprint statement
-data Blueprint = -- | Has ellipse?
-  Blueprint
-  { blueprintPosition :: Position,
-    blueprintIdentifier :: Identifier,
-    -- | Properties of the blueprint
-    blueprintProperties :: [Property],
-    blueprintHasEllipse :: Bool
-  }
+-- | Represents a component of a parameter value
+--
+-- Possible components are simple strings and usages of identifiers
+data ParameterValuePart = Simple String | IdUsage Identifier
   deriving (Show)
 
--- | Represents a property of a blueprint. Just an alias for @String@.
-type Property = String
 
--- | Represents a blueprint usage statements
-data BlueprintUsage = BlueprintUsage
-  { blueprintUsagePosition :: Position,
-    -- | name of the blueprint usage
-    blueprintUsageIdentifier :: Identifier,
-    -- | name of the used blueprint
-    blueprintUsageblueprintUsed :: Identifier,
-    -- | List of values for the blueprint properties
-    blueprintUsageValues :: [String]
-  }
-  deriving (Show)
-
--- | Represents an identifier. Just an alias for @String@.
 type Identifier = String
 
--- ** Parameter Usage
+-- ** Output
+
+-- | Represents an output using double curly brackets
+data Output
+  = Parameter ParameterUsage
+  | TextConstant String
+  deriving (Show)
 
 -- | Represents the usage of a parameter
 data ParameterUsage = ParameterUsage
@@ -130,7 +103,7 @@ data ParameterUsage = ParameterUsage
   }
   deriving (Show)
 
--- | Represents the usage of a blueprint property in a parameter usage
+-- | Represents the usage of a property in a parameter usage
 data PropertyPart = PropertyPart
   { -- | Property name (without @)
     propertyPartProperty :: String,
@@ -138,66 +111,24 @@ data PropertyPart = PropertyPart
   }
   deriving (Show)
 
--- | Represents a function call part when using a blueprint property in a parameter usage
+-- | Represents a function call part a parameter usage
 type FunctionCallPart = [String]
 
 -- ** Other Section Definitions
 
--- | Represents a mixture of constants and parameter usages
-type Mixed = [MixedPart]
-
--- | Represents a part of 'Mixed', either a constant or a parameter usage
-data MixedPart
-  = ParameterPart ParameterUsage
-  | ConstantPart String
-  deriving (Show)
-
--- | Represents the task section
-data TaskSection = TaskSection
-  { taskSectionPosition :: Position,
-    taskSectionBody :: Mixed
+-- | Represents a generic section
+data Section = Section
+  { sectionPosition :: Position,
+    sectionHeadline :: String,
+    sectionBody :: [SectionBodyComponent]
   }
   deriving (Show)
 
--- | Represents the solution section
-data SolutionSection = SolutionSection
-  { solutionSectionPosition :: Position,
-    solutionSectionBody :: Mixed
-  }
-  deriving (Show)
-
--- | Represents the pre allocation section
-data PreAllocationSection = PreAllocationSection
-  { preAllocationSectionPosition :: Position,
-    preAllocationSectionBody :: Mixed
-  }
-  deriving (Show)
-
--- | Represents the test section
-data TestSection = TestSection
-  { testSectionPosition :: Position,
-    testSectionBody :: TestBody
-  }
-  deriving (Show)
-
--- Represents the test section body
-type TestBody = [TestCase]
-
--- | Represents a test case in the test section
-data TestCase = TestCase
-  { testCasePosition :: Position,
-    testCaseCode :: TestCode,
-    testCaseOutcome :: TestOutcome
-  }
-  deriving (Show)
-
--- | Represents the test code of a test case
-type TestCode = Mixed
-
--- | Represents the expected test outcome
-data TestOutcome
-  = ConstantOutcome String
-  | ParameterOutcome ParameterUsage
+-- | Represents a component of a generic section
+data SectionBodyComponent
+  = TextComponent String
+  | OutputComponent Output
+  | CommentComponent String
   deriving (Show)
 
 -- Generate Lenses
@@ -207,18 +138,11 @@ makeLenses ''Position
 makeFields ''Template
 makeFields ''ParameterSection
 makeFields ''ParameterBody
-makeFields ''Enumeration
-makeFields ''EnumerationPart
-makeFields ''Generation
-makeFields ''Blueprint
-makeFields ''BlueprintUsage
+makeFields ''ParameterStatement
+makeFields ''ParameterPart
 makeFields ''ParameterUsage
 makeFields ''PropertyPart
-makeFields ''TaskSection
-makeFields ''SolutionSection
-makeFields ''PreAllocationSection
-makeFields ''TestSection
-makeFields ''TestCase
+makeFields ''Section
 
 -- * Functions
 
