@@ -99,20 +99,17 @@ data Output
 data ParameterUsage = ParameterUsage
   { parameterUsagePosition :: Position,
     parameterUsageIdentifier :: Identifier,
-    parameterUsagePropertyPart :: Maybe PropertyPart
+    parameterUsageCallPart :: Maybe CallPart
   }
   deriving (Show)
 
--- | Represents the usage of a property in a parameter usage
-data PropertyPart = PropertyPart
-  { -- | Property name (without @)
-    propertyPartProperty :: String,
-    propertyPartArguments :: Maybe FunctionCallPart
+-- | Represents the usage of a call in a parameter usage
+data CallPart = CallPart 
+  { -- | Property name 
+    callPartIdentifier :: String,
+    callPartArguments :: [String]
   }
   deriving (Show)
-
--- | Represents a function call part a parameter usage
-type FunctionCallPart = [String]
 
 -- ** Other Section Definitions
 
@@ -128,7 +125,6 @@ data Section = Section
 data SectionBodyComponent
   = TextComponent String
   | OutputComponent Output
-  | CommentComponent String
   deriving (Show)
 
 -- Generate Lenses
@@ -141,7 +137,7 @@ makeFields ''ParameterBody
 makeFields ''ParameterStatement
 makeFields ''ParameterPart
 makeFields ''ParameterUsage
-makeFields ''PropertyPart
+makeFields ''CallPart
 makeFields ''Section
 
 -- * Functions
