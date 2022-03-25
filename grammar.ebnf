@@ -8,7 +8,7 @@ ParameterBody = ParameterStatement {, ParameterStatement};
 ParameterStatement = ParameterPart, [Requires, ParameterPart]
 
 ParameterPart = Identifier, "(", ValueList, ")"
-ValueList = Value {, Value}
+ValueList = Value {, ",", Value}
 Value = "\"", {StringChar | IdentifierUsage}, "\"" (* Vielleicht kann man auch noch eine richtige ParameterUsage hier nutzen *)
 
 IdentifierUsage = "{{", Identifier, "}}"
@@ -35,6 +35,6 @@ Identifier = ? Any number of alphabetic Unicode characters, no spaces ?
 
 ArgChar = ? Any alphabetic or numeric Unicode character, no spaces?
 
-StringChar = ? Any Unicode character, with escape sequence for double quotes ?
+StringChar = ? Any Unicode character ?
 
 BodyChar = ? Like StringChar, but no escape sequences ? (* Block comment can be escaped with {{ "{#" }} *)
