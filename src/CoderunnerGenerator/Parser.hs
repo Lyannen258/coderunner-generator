@@ -14,13 +14,212 @@ import CoderunnerGenerator.Types.AbstractSyntaxTree
 import Data.Void (Void)
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
 
 -- * Parser type
 
 type Parser = Parsec Void String
 
+-- * Lexemes
+
+blockComment :: Parser ()
+blockComment = L.skipBlockComment "{-" "-}"
+
+whitespace :: Parser ()
+whitespace = L.space space1 empty blockComment
+
+hwhitespace :: Parser ()
+hwhitespace = L.space hspace1 empty blockComment
+
+lexeme :: Parser s -> Parser s
+lexeme = L.lexeme whitespace
+
+hlexeme :: Parser s -> Parser s
+hlexeme = L.lexeme hwhitespace
+
 -- * Main Parser
 
+coderunnerParser :: [String] -> Parser Template
+coderunnerParser otherHeadlines =
+  Template
+    placeholder
+    <$> parameterSectionParser
+    <*> otherSectionsParser otherHeadlines
+
+-- * Parameter Section
+
+parameterSectionParser :: Parser ParameterSection
+parameterSectionParser =
+  ParameterSection
+  placeholder
+  <$> parameterBodyParser
+
+parameterBodyParser :: Parser ParameterBody
+parameterBodyParser =
+  ParameterBody
+    placeholder
+    <$> many parameterStatementParser
+
+parameterStatementParser :: Parser ParameterStatement
+parameterStatementParser = do
+  firstParameterPart <- parameterPartParser
+  requiresParser
+  secondParameterPart <- optional parameterPartParser
+  return $
+    ParameterStatement placeholder firstParameterPart secondParameterPart
+
+parameterPartParser :: Parser ParameterPart
+parameterPartParser = do
+  identifier <- identifierParser
+  openParenth
+  valueList <- valueListParser
+  closingParenth
+  return $
+    ParameterPart identifier valueList
+
+valueListParser :: Parser [ParameterValue]
+valueListParser = sepBy valueParser comma
+
+valueParser :: Parser ParameterValue
+valueParser = do
+  openQuotes
+  valueParts <- some valuePartParser
+  closingQuotes
+  return $ ParameterValue valueParts
+
+valuePartParser :: Parser ParameterValuePart
+valuePartParser =
+  try simpleValuePartParser <|> idUsageValuePartParser
+
+simpleValuePartParser :: Parser ParameterValuePart
+simpleValuePartParser = do
+  str <- someTill printChar (try (lookAhead openOutput))
+  return $ Simple str
+
+idUsageValuePartParser :: Parser ParameterValuePart
+idUsageValuePartParser = do
+  openOutput
+  identifier <- identifierParser
+  closingOutput
+  return $ IdUsage identifier
+
+-- * Other Section
+
+otherSectionsParser :: [String] -> Parser [Section]
+otherSectionsParser headlines = 
+  some (otherSectionParser headlines)
+
+otherSectionParser :: [String] -> Parser Section
+otherSectionParser headlines =
+  Section placeholder
+    <$> otherHeadlineParser headlines
+    <*> some sectionBodyComponentParser
+
+otherHeadlineParser :: [String] -> Parser String
+otherHeadlineParser headlines =
+  let headlinesWithColon = map (++ ":") headlines
+      headlineParsers :: [Parser String]
+      headlineParsers = map (try . hlexeme . string) headlinesWithColon
+   in do
+        headline <- choice headlineParsers
+        eol
+        return $ init headline -- Do not take the colon
+
+sectionBodyComponentParser :: Parser SectionBodyComponent
+sectionBodyComponentParser =
+  try textComponentParser <|> outputComponentParser
+
+textComponentParser :: Parser SectionBodyComponent
+textComponentParser =
+  TextComponent <$> someTill textComponentChar (try (lookAhead openOutput))
+
+textComponentChar :: Parser Char
+textComponentChar = do
+  c <- printChar
+  optional blockComment
+  return c
+
+outputComponentParser :: Parser SectionBodyComponent
+outputComponentParser =
+  OutputComponent <$> outputParser
+
+-- * Output / Parameter Usage
+
+outputParser :: Parser Output
+outputParser =
+  openOutput
+    *> stringOutputParser <|> parameterUsageParser
+    <* closingOutput
+
+stringOutputParser :: Parser Output
+stringOutputParser =
+  TextConstant <$> (openQuotes *> some printChar <* closingQuotes)
+
+parameterUsageParser :: Parser Output
+parameterUsageParser = do
+  id <- identifierParser
+  callPart <- (optional . try) callPartParser
+  return $ Parameter $ ParameterUsage placeholder id callPart
+
+callPartParser :: Parser CallPart
+callPartParser = do
+  point
+  callIdentifier <- identifierParser
+  openParenth
+  args <- argsParser
+  closingParenth
+  return $ CallPart callIdentifier args
+
+argsParser :: Parser [String]
+argsParser = sepBy argParser comma
+
+-- * Lexemes
+
+requiresParser :: Parser String
+requiresParser = lexeme (string "requires")
+
+identifierParser :: Parser String
+identifierParser = lexeme (some letterChar)
+
+parameterHeadlineParser :: Parser String
+parameterHeadlineParser = hlexeme (string "Parameter:" <* eol)
+
+openParenth :: Parser Char
+openParenth = lexeme (char '(')
+
+closingParenth :: Parser Char
+closingParenth = lexeme (char ')')
+
+-- | Do not consume whitespace, because string begins
+openQuotes :: Parser Char
+openQuotes = char '"'
+
+closingQuotes :: Parser Char
+closingQuotes = lexeme (char '"')
+
+-- | Exact reverse to openQuotes: Consume whitespace
+-- only on opening output, because after closing, the
+-- string (parameter value) resumes and we want to conserve
+-- whitespace
+openOutput :: Parser String
+openOutput = lexeme (string "{{")
+
+closingOutput :: Parser String
+closingOutput = string "}}"
+
+point :: Parser Char
+point = (lexeme . char) '.'
+
+comma :: Parser Char
+comma = (lexeme . char) ','
+
+argChar :: Parser Char
+argChar = alphaNumChar
+
+argParser :: Parser String
+argParser = (lexeme . some) argChar
+
+{-
 -- | The main parser for a template file
 coderunnerParser :: Parser Template
 coderunnerParser =
@@ -344,3 +543,5 @@ linebreak = do eol
 
 optionalWhitespace :: Parser String
 optionalWhitespace = do many (oneOf " \t")
+
+-}
