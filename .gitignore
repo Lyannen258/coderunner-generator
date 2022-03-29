@@ -1,7 +1,7 @@
 dist-newstyle/
 
 example-files/*
-!example-files/*.txt
+!example-files/*.tmpl
 
 .stack-work
 stack.yaml.lock
