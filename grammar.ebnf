@@ -35,6 +35,6 @@ Identifier = ? Any number of alphabetic Unicode characters, no spaces ?
 
 ArgChar = ? Any alphabetic or numeric Unicode character, no spaces?
 
-StringChar = ? Any Unicode character ?
+StringChar = ? Any Unicode character, but no double quotes ?
 
 BodyChar = ? Like StringChar, but no escape sequences ? (* Block comment can be escaped with {{ "{#" }} *)
