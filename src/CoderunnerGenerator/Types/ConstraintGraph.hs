@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 
 module CoderunnerGenerator.Types.ConstraintGraph
-  ( Value (..),
+  ( Node (..),
     ConstraintGraph,
     Edge,
     parameter,
@@ -31,33 +31,34 @@ import qualified Data.Set as S
 import CoderunnerGenerator.Helper
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.TH (makeLenses)
+import CoderunnerGenerator.Types.SymbolTable (Value) 
 
 -- * Types and Lenses
 ---------------------
 
 -- | Data type for a node in the constraint graph
-data Value = Value
+data Node = Node
   { _parameter :: String,
-    _value :: [String]
+    _value :: [Value]
   }
   deriving (Eq, Ord, Show)
 
-makeLenses ''Value
+makeLenses ''Node
 
 -- | Data type for an edge in the constraint graph
-type Edge = (Value, Value)
+type Edge = (Node, Node)
 
 -- | The constraint graph
 --
 -- Holds the dependencies between parameter values
-data ConstraintGraph = ConstraintGraph (Set Value) (Set Edge)
+data ConstraintGraph = ConstraintGraph (Set Node) (Set Edge)
   deriving (Show)
 
 -- * Getters
 ----------
 
 -- | Returns a set of all values in the constraint graph.
-values :: ConstraintGraph -> Set Value
+values :: ConstraintGraph -> Set Node
 values (ConstraintGraph vs _) = vs
 
 -- | Returns a set of all edges in the constraint graph.
@@ -96,7 +97,7 @@ infixl 1 ##>
 -- | Node constructor
 --
 -- Constructs a constraint graph from a value
-node :: Value -> ConstraintGraph
+node :: Node -> ConstraintGraph
 node v = ConstraintGraph (S.singleton v) S.empty
 
 -- | Edge constructor
@@ -112,17 +113,17 @@ edge (src, dst) = ConstraintGraph vs es
 --
 -- Takes two strings and constructs a constraint graph.
 -- First string is parameter, second is value.
-node' :: (String, String) -> ConstraintGraph
-node' (p, v) = node $ Value p [v]
+node' :: (String, Value) -> ConstraintGraph
+node' (p, v) = node $ Node p [v]
 
 -- | Edge constructor
 --
 -- Constructs a constraint graph containing just an edge.
-edge' :: (String, String) -> (String, String) -> ConstraintGraph
+edge' :: (String, Value) -> (String, Value) -> ConstraintGraph
 edge' (p1, v1) (p2, v2) = edge (n1, n2)
   where
-    n1 = Value p1 [v1]
-    n2 = Value p2 [v2]
+    n1 = Node p1 [v1]
+    n2 = Node p2 [v2]
 
 -- * Destruction
 --------------
@@ -147,7 +148,7 @@ parameters :: ConstraintGraph -> Set String
 parameters g = S.map _parameter (values g)
 
 -- | Returns all Values for the given parameter
-valuesFor :: String -> ConstraintGraph -> Set Value
+valuesFor :: String -> ConstraintGraph -> Set Node
 valuesFor param g = S.filter f (values g)
   where
     f v = v ^. parameter == param
@@ -157,7 +158,7 @@ valuesFor param g = S.filter f (values g)
 -- Cliques are a concept of graph theory.
 --
 -- Algorithm based on https://iq.opengenus.org/algorithm-to-find-cliques-of-a-given-size-k/
-kCliques :: Int -> ConstraintGraph -> Set (Set Value)
+kCliques :: Int -> ConstraintGraph -> Set (Set Node)
 kCliques k g
   | k < 2 = S.empty
   | k == 2 = S.map (\(v1, v2) -> S.insert v2 $ S.singleton v1) $ edges g
@@ -179,7 +180,7 @@ kCliques k g
         isEdgeExists = size_sd == 2 && (isTuple `S.member` edges g)
 
 -- | Finds a set of all valid configurations
-configs :: ConstraintGraph -> Set (Set Value)
+configs :: ConstraintGraph -> Set (Set Node)
 configs g = kCliques k g
   where
     k = S.size $ parameters g
@@ -199,14 +200,14 @@ addImplicitEdges g = ConstraintGraph (values g) (edges g `S.union` additionalEdg
   where
     additionalEdges = S.unions $ S.map addPerNode (values g)
 
-    addPerNode :: Value -> Set Edge
+    addPerNode :: Node -> Set Edge
     addPerNode v = newEdges
       where
         outEdges = S.filter (\(src, _) -> src == v) (edges g)
         reachableNodes = S.map snd outEdges
         coveredParams = S.insert (v ^. parameter) (S.map _parameter reachableNodes)
         missingParams = parameters g \\ coveredParams
-        missingValues = S.filter (\(Value p _) -> p `S.member` missingParams) (values g)
+        missingValues = S.filter (\(Node p _) -> p `S.member` missingParams) (values g)
         newEdges = S.map (v,) missingValues
 
 -- | Remove non-reciproc edges

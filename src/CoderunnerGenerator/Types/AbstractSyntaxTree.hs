@@ -82,8 +82,11 @@ newtype ParameterValue = ParameterValue [ParameterValuePart]
 --
 -- Possible components are simple strings and usages of identifiers
 data ParameterValuePart = Simple String | IdUsage Identifier
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
+isIdUsage :: ParameterValuePart -> Bool
+isIdUsage (Simple _) = False
+isIdUsage (IdUsage _) = True
 
 type Identifier = String
 
@@ -104,8 +107,8 @@ data ParameterUsage = ParameterUsage
   deriving (Show)
 
 -- | Represents the usage of a call in a parameter usage
-data CallPart = CallPart 
-  { -- | Property name 
+data CallPart = CallPart
+  { -- | Property name
     callPartIdentifier :: String,
     callPartArguments :: [String]
   }

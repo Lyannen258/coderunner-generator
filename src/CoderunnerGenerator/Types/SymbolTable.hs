@@ -1,133 +1,147 @@
-module CoderunnerGenerator.Types.SymbolTable where
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-import CoderunnerGenerator.Helper (fillToTwenty)
-import CoderunnerGenerator.Types.AbstractSyntaxTree (Mixed)
-import Control.Monad (foldM)
-import Data.List (intercalate, intersect, union, (\\))
+module CoderunnerGenerator.Types.SymbolTable
+  ( SymbolTable,
+    empty,
+    add,
+    lengthSI,
+    lengthSI',
+    lookup,
+    SymbolInformation,
+    singleSymbol,
+    multiSymbol,
+    valuesSingle,
+    Value,
+    finalValue,
+    incompleteValue,
+  )
+where
+
+import CoderunnerGenerator.Types.AbstractSyntaxTree (ParameterValuePart)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Prelude hiding (lookup)
 
--- * Symbol Table
+-- * Symbol Table Types
 
-type SymbolTable = Map String SymbolInformation
+-- | The main symbol table type.
+newtype SymbolTable = SymbolTable (Map Identifier SymbolInformation)
 
-merge :: SymbolTable -> SymbolTable -> Either String SymbolTable
-merge t1 t2 =
-  let keys1 = M.keys t1
-      keys2 = M.keys t2
-      overlappingKeys = intersect keys1 keys2
-      allKeys = union keys1 keys2
-      uniqueKeys = allKeys \\ overlappingKeys
-      mapperOverlapping k = do
-        si <- mergeSymbolInfos (t1 M.! k) (t2 M.! k)
-        return (k, si)
-   in do
-        merged <- mapM mapperOverlapping overlappingKeys
-        let single = map (\k -> (k, M.union t1 t2 M.! k)) uniqueKeys
-        let all = merged ++ single
-        return $ M.fromList all
+-- | Represents an identifier. Type synonym for string.
+type Identifier = String
 
-mergeMany :: [SymbolTable] -> Either String SymbolTable
-mergeMany = foldM merge empty
-
-empty :: SymbolTable
-empty = M.empty
-
-onlyBlueprintUsagePre :: SymbolTable -> Map String BlueprintUsagePre
-onlyBlueprintUsagePre table =
-  let folder k (BlueprintUsagePreSymbol bpPre) acc =
-        M.insert k bpPre acc
-      folder _ _ acc = acc
-   in M.foldrWithKey folder M.empty table
-
--- * Symbol Information
-
+-- | A SymbolInformation can represent a single-parameter or a multi-parameter
 data SymbolInformation
-  = EnumerationSymbol Enumeration
-  | GenerationSymbol Generation
-  | BlueprintSymbol Blueprint
-  | BlueprintUsageSymbol BlueprintUsage
-  | BlueprintUsagePreSymbol BlueprintUsagePre -- in first parsing run, the blueprint usage cannot be entirely processed. This is the information of a blueprint usage before the second run.
-  deriving (Show)
+  = SingleSymbol SingleParam
+  | MultiSymbol MultiParam
 
-mergeSymbolInfos :: SymbolInformation -> SymbolInformation -> Either String SymbolInformation
-mergeSymbolInfos (EnumerationSymbol s1) (EnumerationSymbol s2) =
-  let e = mergeEnumerations s1 s2
-   in return $ EnumerationSymbol e
-mergeSymbolInfos _ _ = Left "It is not possible to merge two symbol informations, that are not enumerations."
-
--- * Enumeration
-
-type Enumeration = [EnumerationValue]
-
-data EnumerationValue = EnumerationValue
-  { enumValue :: String,
-    rules :: [RequiresRule]
+-- | Represents a parameter that has a single value-range. Exactly one value will be selected.
+newtype SingleParam = SingleParam
+  { valueRange :: ValueRange
   }
-  deriving (Show)
 
-data RequiresRule
-  = RequiresValue String String -- Identifier, Value
-  | SetsValueArea String [String] -- Identifier, ValueArea
-  deriving (Show)
-
-mergeEnumerations :: Enumeration -> Enumeration -> Enumeration
-mergeEnumerations e1 e2 =
-  let mergedValues = concatMap (uncurry mergeEnumerationValues) [(a, b) | a <- e1, b <- e2]
-      singleValues = filter filterPredicate (e1 ++ e2)
-      filterPredicate x = enumValue x `elem` getDuplicateKeys (e1 ++ e2)
-   in mergedValues ++ singleValues
-
-getDuplicateKeys :: Enumeration -> [String]
-getDuplicateKeys vs = M.keys multiOccurences
-  where
-    occurences = countOccurences (map enumValue vs) M.empty
-    multiOccurences = M.filter (<= 1) occurences
-
-mergeEnumerationValues :: EnumerationValue -> EnumerationValue -> [EnumerationValue]
-mergeEnumerationValues v1 v2
-  | enumValue v1 == enumValue v2 =
-    [ EnumerationValue
-        (enumValue v1)
-        (rules v1 ++ rules v2)
-    ]
-  | otherwise = []
-
--- * Generation
-
-type Generation = Mixed
-
--- * Blueprint
-
-data Blueprint = Blueprint
-  { properties :: [Property],
-    hasEllipse :: Bool
+-- | Represents a parameter that has multiple value-ranges. One value-range will be selected.
+-- | The values of the choosen value range can then be used with functions such as choose_at_random().
+newtype MultiParam = MultiParam
+  { valueRanges :: [ValueRange]
   }
-  deriving (Show)
 
-type Property = String
+-- | A list of values
+newtype ValueRange = ValueRange [Value]
 
--- * Blueprint Usage
+-- | Represents a value in a value-range of a parameter. If there is an identifier used inside of the
+-- | value, the final value can only be determined after the configuration (i.e. when all parameters have
+-- | have been assigned a value)
+data Value
+  = Final String
+  | Incomplete [ParameterValuePart] -- list of text constants and used identifiers, same as in AST
+  deriving (Show, Eq, Ord)
 
-data BlueprintUsage = BlueprintUsage
-  { blueprint :: String,
-    propertyValues :: Map String String,
-    -- | Ellipse values
-    additionalValues :: [String]
-  }
-  deriving (Show)
+-- * Interface
 
-data BlueprintUsagePre = BlueprintUsagePre
-  { preBlueprint :: String,
-    preValues :: [String]
-  }
-  deriving (Show)
+-- | An empty symbol table
+empty :: SymbolTable
+empty = SymbolTable M.empty
 
--- * Helper
+-- | Add an identifier and its symbol information to the symbol table
+add :: Identifier -> SymbolInformation -> SymbolTable -> Either String SymbolTable
+add id si st =
+  let m = unpack st
+      existingSI = M.lookup id m
+      newSI = case existingSI of
+        Nothing -> si
+        Just si2 -> mergeSymbolInfos si si2
+   in Right st
 
-countOccurences :: Ord a => [a] -> M.Map a Int -> M.Map a Int -- TODO wofür braucht man die Funktion? Was macht sie genau? Als zweiter Parameter macht eig. M.Map a b mehr Sinn
-countOccurences (v : vs) counted =
-  if M.member v counted
-    then countOccurences vs $ M.insert v ((counted M.! v) + 1) counted
-    else countOccurences vs $ M.insert v 1 counted
-countOccurences [] counted = counted
+-- | Construct a single symbol
+singleSymbol :: [Value] -> SymbolInformation
+singleSymbol = SingleSymbol . SingleParam . ValueRange
+
+-- | Construct a multi symbol
+multiSymbol :: [[Value]] -> SymbolInformation
+multiSymbol vrs = MultiSymbol . MultiParam $ map ValueRange vrs
+
+-- | Construct a final value
+--
+-- Right no its just an alias for the constructor.
+finalValue :: String -> Value
+finalValue = Final
+
+-- | Construct a value that cannot yet be fully determined
+incompleteValue :: [ParameterValuePart] -> Value
+incompleteValue = Incomplete
+
+-- | Returns the number of possible values in case of a single symbol
+-- and the number of value ranges in case of a multisymbol
+lengthSI :: Identifier -> SymbolTable -> Int
+lengthSI id st =
+  let maybeSI = lookup id st
+   in maybe 0 lengthSI' maybeSI
+
+lengthSI' :: SymbolInformation -> Int
+lengthSI' (SingleSymbol si) = length (unpack si :: [Value])
+lengthSI' (MultiSymbol si) = length (unpack si :: [[Value]])
+
+valuesSingle :: SymbolInformation -> [Value]
+valuesSingle (SingleSymbol ss) = unpack ss
+valuesSingle (MultiSymbol ms) = []
+
+lookup :: Identifier -> SymbolTable -> Maybe SymbolInformation
+lookup id (SymbolTable m) = M.lookup id m
+
+-- * Internal
+
+-- | Useful if a is a newtype and therefore only contains a single value
+class Unpackable a b where
+  unpack :: a -> b
+
+instance Unpackable SymbolTable (Map Identifier SymbolInformation) where
+  unpack (SymbolTable m) = m
+
+instance Unpackable ValueRange [Value] where
+  unpack (ValueRange a) = a
+
+instance Unpackable SingleParam [Value] where
+  unpack (SingleParam a) = unpack a
+
+instance Unpackable MultiParam [[Value]] where
+  unpack (MultiParam a) = map unpack a
+
+-- | Merge two symbol infos
+mergeSymbolInfos :: SymbolInformation -> SymbolInformation -> SymbolInformation
+mergeSymbolInfos (MultiSymbol a) (MultiSymbol b) =
+  let vrsA = unpack a :: [[Value]]
+      vrsB = unpack b :: [[Value]]
+      f b as =
+        if b `elem` as
+          then as
+          else as ++ [b]
+   in (MultiSymbol . MultiParam . map ValueRange) $ foldr f vrsA vrsB
+mergeSymbolInfos (SingleSymbol a) (SingleSymbol b) =
+  let vrA = unpack a :: [Value]
+      vrB = unpack b :: [Value]
+      f b as = if b `elem` as then as else as ++ [b]
+   in (SingleSymbol . SingleParam . ValueRange) $ foldr f vrA vrB
+mergeSymbolInfos ss@(SingleSymbol a) ms@(MultiSymbol b) = mergeSymbolInfos ms ss
+mergeSymbolInfos (MultiSymbol a) (SingleSymbol b) = mergeSymbolInfos (SingleSymbol b) (MultiSymbol a)

@@ -19,3 +19,6 @@ fillToTwenty s =
   if length s < 20
     then fillToTwenty (s ++ " ")
     else s
+
+singleton :: a -> [a]
+singleton a = [a]

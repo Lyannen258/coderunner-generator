@@ -1,7 +1,6 @@
 module CoderunnerGenerator.Generator where
 
 import CoderunnerGenerator.Helper
-import CoderunnerGenerator.Interaction
 import CoderunnerGenerator.Types.AbstractSyntaxTree
 import CoderunnerGenerator.Types.SymbolTable as ST
 import Control.Monad (foldM)

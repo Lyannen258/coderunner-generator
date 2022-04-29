@@ -16,7 +16,7 @@ import Brick.Main (defaultMain)
 import Brick.Widgets.Border
 import CoderunnerGenerator.Helper (maybeToEither)
 import qualified CoderunnerGenerator.Helper as H
-import qualified CoderunnerGenerator.Types.ConfigurationState as CS
+--import qualified CoderunnerGenerator.Types.ConfigurationState as CS
 import CoderunnerGenerator.Types.ConstraintGraph (ConstraintGraph, Edge, Value)
 import qualified CoderunnerGenerator.Types.ConstraintGraph as G
 import CoderunnerGenerator.Types.SymbolTable (SymbolInformation (EnumerationSymbol), SymbolTable)

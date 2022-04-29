@@ -8,7 +8,7 @@
 -- in turn are constructed by using even more granular parsers.
 --
 -- The parsers are loosely correlated with the rules in /grammar.ebnf/.
-module CoderunnerGenerator.Parser where
+module CoderunnerGenerator.Parser (parseTemplate) where
 
 import CoderunnerGenerator.Types.AbstractSyntaxTree
 import Control.Monad.Trans.Class
@@ -18,6 +18,15 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Debug
+
+-- * Interface
+
+parseTemplate :: String -> [String] -> Either String Template
+parseTemplate template sections = 
+  let result = runReader (runParserT coderunnerParser "" template) sections
+  in case result of
+    Left peb -> Left $ show peb
+    Right tem -> Right tem
 
 -- * Parser type
 
