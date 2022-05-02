@@ -3,15 +3,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 -- |
--- Module      : CoderunnerGenerator.Types.AbstractSyntaxTree2
--- Description : Contains the components that represent an abstract syntax tree.
+-- Module      : CPPCoderunner.AbstractSyntaxTree2
+-- Description : Contains the components that represent an abstract syntax tree for C++ coderunner templates.
 --
 -- Contains the components that represent an abstract syntax tree. They are correlated to the rules in grammar.ebnf
 --
 -- The root node is 'Template'.
 --
 -- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
-module CoderunnerGenerator.Types.AbstractSyntaxTree where
+module CPPCoderunner.AbstractSyntaxTree where
 
 import Lens.Micro.Extras (view)
 import Lens.Micro.TH
@@ -35,7 +35,10 @@ placeholder = Position 0 0 0 0
 data Template = Template
   { templatePosition :: Position,
     templateParameterSection :: ParameterSection,
-    templateOtherSections :: [Section]
+    templateTaskSection :: Section,
+    templateSolutionSection :: Section,
+    templatePreAllocationSection :: Section,
+    templateTestSection :: TestSection
   }
   deriving (Show)
 
@@ -130,6 +133,20 @@ data SectionBodyComponent
   | OutputComponent Output
   deriving (Show)
 
+-- | Represents a test section
+data TestSection = TestSection
+  { testSectionPosition :: Position,
+    testSectionTestCases :: [TestCase]
+  }
+  deriving (Show)
+
+-- | Represents a test case
+data TestCase = TestCase
+  { testCaseCode :: [SectionBodyComponent],
+    testCaseOutcome :: [SectionBodyComponent]
+  }
+  deriving (Show)
+
 -- Generate Lenses
 
 makeLenses ''Position
@@ -142,6 +159,8 @@ makeFields ''ParameterPart
 makeFields ''ParameterUsage
 makeFields ''CallPart
 makeFields ''Section
+makeFields ''TestSection
+makeFields ''TestCase
 
 -- * Functions
 
