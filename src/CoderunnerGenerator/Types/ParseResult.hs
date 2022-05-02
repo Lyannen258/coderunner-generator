@@ -2,11 +2,15 @@ module CoderunnerGenerator.Types.ParseResult
   ( ParseResult,
     ParameterName,
     Value (Final, NeedsInput),
-    ValuePart (StringPart, ParameterPart)
+    ValuePart (StringPart, ParameterPart),
+    addValues,
+    addConstraint,
+    empty
   )
 where
 
-import Data.Foldable (elem, find)
+import Data.Foldable (elem, find, foldl')
+import Data.List (nub)
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 
@@ -49,8 +53,8 @@ data ValuePart
 
 -- | Data type for a constraint between 2 parameter values. The values are identified by their index.
 -- First one requires the second one.
-data Constraint = Constraint (ParameterName, Int) (ParameterName, Int) 
-  deriving (Show)
+data Constraint = Constraint (ParameterName, Int) (ParameterName, Int)
+  deriving (Show, Eq)
 
 -- | Add values for a parameter to a 'ParseResult'. Duplicate values
 -- will not be added, if there are already values for the parameter.
@@ -62,10 +66,10 @@ addValues pr@(ParseResult pc@(ParameterComposition ps cs)) pn vs =
     currentValues = getParameterValues pr pn
 
     allValues :: Seq Value
-    allValues = foldr addIfNotContained currentValues vs
+    allValues = foldl' addIfNotContained currentValues vs
 
-    addIfNotContained :: Value -> Seq Value -> Seq Value
-    addIfNotContained v vs
+    addIfNotContained :: Seq Value -> Value -> Seq Value
+    addIfNotContained vs v
       | v `elem` vs = vs
       | otherwise = vs Seq.|> v
 
@@ -76,6 +80,28 @@ addValues pr@(ParseResult pc@(ParameterComposition ps cs)) pn vs =
     d p@(Parameter name _) ps
       | name == pn = ps
       | otherwise = ps ++ [p]
+
+-- | Add a constraint between two parameter values.
+addConstraint :: ParseResult -> (ParameterName, Value) -> (ParameterName, Value) -> Maybe ParseResult
+addConstraint pr@(ParseResult pc) v1 v2 =
+  let v1pos :: Maybe Int
+      v1pos = uncurry findValueIndex v1
+
+      v2pos :: Maybe Int
+      v2pos = uncurry findValueIndex v2
+
+      findValueIndex :: ParameterName -> Value -> Maybe Int
+      findValueIndex pn v =
+        Seq.elemIndexL v (getParameterValues pr pn)
+
+      constraintsNew :: Maybe [Constraint]
+      constraintsNew = do
+        v1pos' <- v1pos
+        v2pos' <- v2pos
+        return $ nub $ getConstraints pr ++ [Constraint (fst v1, v1pos') (fst v2, v2pos')]
+   in do
+        constraintsNew' <- constraintsNew
+        return $ ParseResult $ pc {constraints = constraintsNew'}
 
 -- | Get all values for a specific parameter.
 getParameterValues :: ParseResult -> ParameterName -> Seq Value
@@ -94,6 +120,10 @@ getParameter (ParseResult (ParameterComposition ps _)) pn =
   where
     f :: Parameter -> Bool
     f (Parameter name _) = name == pn
+
+-- | Get the list of constraints from a 'ParseResult'
+getConstraints :: ParseResult -> [Constraint]
+getConstraints (ParseResult (ParameterComposition _ cs)) = cs
 
 -- | An empty parse result
 empty :: ParseResult
