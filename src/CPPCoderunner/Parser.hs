@@ -1,16 +1,8 @@
--- |
--- Module      : CoderunnerGenerator.Parser
--- Description : Contains parsers to analyze a template file and form an abstract syntax tree
---
--- Contains parsers to analyze a template file and form an abstract syntax tree
---
--- The main parser is @coderunnerParser@. It is made up of section specific parsers, which
--- in turn are constructed by using even more granular parsers.
---
--- The parsers are loosely correlated with the rules in /grammar.ebnf/.
-module CoderunnerGenerator.Parser (parseTemplate) where
+module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 
-import CoderunnerGenerator.Types.AbstractSyntaxTree
+import CPPCoderunner.AbstractSyntaxTree
+import CoderunnerGenerator.Types.ParseResult (ParseResult)
+import qualified CoderunnerGenerator.Types.ParseResult as PR
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import Data.Void (Void)
@@ -18,19 +10,81 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Debug
+import Lens.Micro ((^.))
+import Data.Foldable (foldl')
 
 -- * Interface
 
-parseTemplate :: String -> [String] -> Either String Template
-parseTemplate template sections = 
-  let result = runReader (runParserT coderunnerParser "" template) sections
-  in case result of
-    Left peb -> Left $ show peb
-    Right tem -> Right tem
+parse :: String -> Either String (ParseResult, Template)
+parse s = do
+  tmpl <- parseTemplate s
+  let pr = constructParseResult tmpl
+  return (pr, tmpl)
+
+constructParseResult :: Template -> ParseResult
+constructParseResult tem = foldr f PR.empty parameterStatements'
+  where
+    parameterStatements' :: [ParameterStatement]
+    parameterStatements' = tem ^. parameterSection . parameterBody . parameterStatements
+
+    f :: ParameterStatement -> ParseResult -> ParseResult
+    f ps pr =
+      let psMain = ps ^. main
+          psReq = ps ^. requires
+
+          pr' :: ParseResult
+          pr' = PR.addValues pr (psMain ^. identifier) (map toPRValue (psMain ^. values))
+
+          pr'' :: ParseResult
+          pr'' = case psReq of
+            Nothing -> pr'
+            Just pp -> PR.addValues pr' (pp ^. identifier) (map toPRValue (pp ^. values))
+
+          toPRValue :: ParameterValue -> PR.Value
+          toPRValue (ParameterValue pvps) = if any isIdUsage pvps
+              then PR.NeedsInput (map toPRValuePart pvps)
+              else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
+
+          isIDUsage :: ParameterValuePart -> Bool
+          isIDUsage (IdUsage _) = True
+          isIDUsage _ = False
+
+          toPRValuePart :: ParameterValuePart -> PR.ValuePart
+          toPRValuePart (Simple s) = PR.StringPart s
+          toPRValuePart (IdUsage id) = PR.ParameterPart id
+       in pr
+
+
+parseTemplate :: String -> Either String Template
+parseTemplate template =
+  let result = Text.Megaparsec.parse coderunnerParser "" template
+   in case result of
+        Left peb -> Left $ show peb
+        Right tem -> Right tem
+
+-- * Section headlines
+
+parameter :: String
+parameter = "Parameter"
+
+task :: String
+task = "Task"
+
+solution :: String
+solution = "Solution"
+
+preAllocation :: String
+preAllocation = "PreAllocation"
+
+test :: String
+test = "Tests"
+
+headlines :: [String]
+headlines = [parameter, task, solution, preAllocation, test]
 
 -- * Parser type
 
-type Parser = ParsecT Void String (Reader [String])
+type Parser = Parsec Void String
 
 -- * Lexemes
 
@@ -56,7 +110,10 @@ coderunnerParser =
   Template
     placeholder
     <$> parameterSectionParser
-    <*> otherSectionsParser
+    <*> simpleSectionParser task
+    <*> simpleSectionParser solution
+    <*> simpleSectionParser preAllocation
+    <*> testSectionParser
 
 -- * Parameter Section
 
@@ -74,8 +131,7 @@ parameterBodyParser =
 
 parameterStatementParser :: Parser ParameterStatement
 parameterStatementParser = do
-  headlines <- lift ask
-  notFollowedBy $ otherHeadlineParser headlines
+  notFollowedBy $ headlineOneOfParser headlines
   firstParameterPart <- parameterPartParser
   secondParameterPart <- optional (requiresParser *> parameterPartParser)
   return $
@@ -123,54 +179,78 @@ idUsageValuePartParser = do
   closingOutput
   return $ IdUsage identifier
 
--- * Other Section
+-- * Other Sections
 
-otherSectionsParser :: Parser [Section]
-otherSectionsParser =
-  some $ dbg "otherSection" otherSectionParser
-
-otherSectionParser :: Parser Section
-otherSectionParser = do
-  headlines <- lift ask
+simpleSectionParser :: String -> Parser Section
+simpleSectionParser headline = do
   Section placeholder
-    <$> otherHeadlineParser headlines
-    <*> some (dbg "bodyComponent" sectionBodyComponentParser)
+    <$> headlineParser headline
+    <*> some (sectionBodyComponentParser $ headlineOneOfParser headlines)
 
-otherHeadlineParser :: [String] -> Parser String
-otherHeadlineParser headlines =
-  let headlinesWithColon = map (++ ":") headlines
-      headlineParsers :: [Parser String]
-      headlineParsers = map (try . hlexeme . string) headlinesWithColon
+headlineParser :: String -> Parser String
+headlineParser headline =
+  let headlineWithColon = headline ++ ":"
+      headlineParser :: Parser String
+      headlineParser = (try . hlexeme . string) headlineWithColon
    in do
-        headline <- choice headlineParsers
+        headline <- headlineParser
         eol
         return $ init headline -- Do not take the colon
 
-sectionBodyComponentParser :: Parser SectionBodyComponent
-sectionBodyComponentParser =
-  try (dbg "textComponent" textComponentParser) <|> dbg "outputComponent" outputComponentParser
+headlineOneOfParser :: [String] -> Parser String
+headlineOneOfParser headlines =
+  let hParsers :: [Parser String]
+      hParsers = map headlineParser headlines
+   in choice hParsers
 
-textComponentParser :: Parser SectionBodyComponent
-textComponentParser = do
-  listOfStrings <- someTill textComponentChar (try (lookAhead textComponentEndParser))
+sectionBodyParser :: Parser a -> Parser [SectionBodyComponent]
+sectionBodyParser textEnd =
+  some $ sectionBodyComponentParser textEnd
+
+sectionBodyComponentParser :: Parser a -> Parser SectionBodyComponent
+sectionBodyComponentParser textEnd =
+  try (textComponentParser textEnd) <|> outputComponentParser
+
+textComponentParser :: Parser a -> Parser SectionBodyComponent
+textComponentParser textEnd = do
+  listOfStrings <- some (textComponentChar textEnd)
   let content = concat listOfStrings
   return $ TextComponent content
 
-textComponentEndParser :: Parser ()
-textComponentEndParser = do
-  headlines <- lift ask
-  (() <$ otherHeadlineParser headlines) <|> (() <$ openOutput) <|> blockComment <|> eof
-
-textComponentChar :: Parser String
-textComponentChar = do
-  notFollowedBy textComponentEndParser
+textComponentChar :: Parser a -> Parser String
+textComponentChar textEnd = do
+  notFollowedBy (textComponentEndParser textEnd)
   c <- ((: []) <$> printChar) <|> eol
   optional blockComment
   return c
 
+textComponentEndParser :: Parser a -> Parser ()
+textComponentEndParser additionalEndParser = do
+  (() <$ additionalEndParser) <|> (() <$ openOutput) <|> blockComment <|> eof
+
 outputComponentParser :: Parser SectionBodyComponent
 outputComponentParser =
   OutputComponent <$> outputParser
+
+testSectionParser :: Parser TestSection
+testSectionParser = do
+  headlineParser test
+  testcases <- some testCaseParser
+  return $ TestSection placeholder testcases
+
+testCaseParser :: Parser TestCase
+testCaseParser = do
+  codeHeadlineParser
+  code <- some $ sectionBodyComponentParser outcomeHeadlineParser
+  outcomeHeadlineParser
+  outcome <- some $ sectionBodyComponentParser $ outcomeHeadlineParser <|> headlineOneOfParser headlines
+  return $ TestCase placeholder code outcome
+
+codeHeadlineParser :: Parser String
+codeHeadlineParser = headlineParser "Code"
+
+outcomeHeadlineParser :: Parser String
+outcomeHeadlineParser = headlineParser "Outcome"
 
 -- * Output / Parameter Usage
 
