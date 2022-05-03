@@ -142,7 +142,8 @@ data TestSection = TestSection
 
 -- | Represents a test case
 data TestCase = TestCase
-  { testCaseCode :: [SectionBodyComponent],
+  { testCasePosition :: Position,
+    testCaseCode :: [SectionBodyComponent],
     testCaseOutcome :: [SectionBodyComponent]
   }
   deriving (Show)
@@ -161,8 +162,3 @@ makeFields ''CallPart
 makeFields ''Section
 makeFields ''TestSection
 makeFields ''TestCase
-
--- * Functions
-
-instance HasParameterStatements Template [ParameterStatement] where
-  parameterStatements = parameterSection . parameterBody . parameterStatements
