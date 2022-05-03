@@ -3,45 +3,101 @@ module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 import CPPCoderunner.AbstractSyntaxTree
 import CoderunnerGenerator.Types.ParseResult (ParseResult)
 import qualified CoderunnerGenerator.Types.ParseResult as PR
+import Control.Monad (foldM)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
+import Data.Foldable (foldl')
 import Data.Void (Void)
+import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Debug
-import Lens.Micro ((^.))
-import Data.Foldable (foldl')
+
+-- * Error Messages
+
+valueMissing :: String -> String -> String -> String -> String
+valueMissing firstId firstValue secondId secondValue =
+  "Tried to add constraint to ParseResult but could not find one of the parameter values. "
+    ++ "First Value: "
+    ++ firstId
+    ++ "->"
+    ++ firstValue
+    ++ "\n"
+    ++ "Second Value: "
+    ++ secondId
+    ++ "->"
+    ++ secondValue
+
+valueAmountMismatch :: String -> String -> Int -> Int -> String
+valueAmountMismatch fstId sndId fstAmount sndAmount =
+  "Tried to add constraints between values of "
+    ++ fstId
+    ++ " and "
+    ++ sndId
+    ++ ", but amount of values does not match. "
+    ++ fstId
+    ++ " has "
+    ++ show fstAmount
+    ++ " and "
+    ++ sndId
+    ++ " has "
+    ++ show sndAmount
+    ++ "."
 
 -- * Interface
 
 parse :: String -> Either String (ParseResult, Template)
 parse s = do
   tmpl <- parseTemplate s
-  let pr = constructParseResult tmpl
+  pr <- constructParseResult tmpl
   return (pr, tmpl)
 
-constructParseResult :: Template -> ParseResult
-constructParseResult tem = foldr f PR.empty parameterStatements'
+constructParseResult :: Template -> Either String ParseResult
+constructParseResult tem = foldM f PR.empty parameterStatements'
   where
     parameterStatements' :: [ParameterStatement]
     parameterStatements' = tem ^. parameterSection . parameterBody . parameterStatements
 
-    f :: ParameterStatement -> ParseResult -> ParseResult
-    f ps pr =
+    f :: ParseResult -> ParameterStatement -> Either String ParseResult
+    f pr ps =
       let psMain = ps ^. main
           psReq = ps ^. requires
 
-          pr' :: ParseResult
-          pr' = PR.addValues pr (psMain ^. identifier) (map toPRValue (psMain ^. values))
+          mainPRValues :: [PR.Value]
+          mainPRValues = map toPRValue (psMain ^. values)
 
-          pr'' :: ParseResult
+          pr' :: ParseResult
+          pr' = PR.addValues pr (psMain ^. identifier) mainPRValues
+
+          pr'' :: Either String ParseResult
           pr'' = case psReq of
-            Nothing -> pr'
-            Just pp -> PR.addValues pr' (pp ^. identifier) (map toPRValue (pp ^. values))
+            Nothing -> Right pr'
+            Just pp ->
+              let reqPRValues :: [PR.Value]
+                  reqPRValues = map toPRValue (pp ^. values)
+
+                  prTemp :: ParseResult
+                  prTemp = PR.addValues pr' (pp ^. identifier) reqPRValues
+
+                  addConstraints :: Either String ParseResult
+                  addConstraints
+                    | length mainPRValues == length reqPRValues = foldM f prTemp (zip mainPRValues reqPRValues)
+                    | length mainPRValues == 1 && not (null reqPRValues) = foldM f prTemp (zip (repeat . head $ mainPRValues) reqPRValues)
+                    | otherwise = Left $ valueAmountMismatch (psMain ^. identifier) (pp ^. identifier) (length mainPRValues) (length reqPRValues)
+
+                  f :: ParseResult -> (PR.Value, PR.Value) -> Either String ParseResult
+                  f pr v = case PR.addConstraint
+                    pr
+                    (psMain ^. identifier, fst v)
+                    (pp ^. identifier, snd v) of
+                    Nothing -> Left $ valueMissing (psMain ^. identifier) (show . fst $ v) (pp ^. identifier) (show . snd $ v)
+                    Just pr -> Right pr
+               in addConstraints
 
           toPRValue :: ParameterValue -> PR.Value
-          toPRValue (ParameterValue pvps) = if any isIdUsage pvps
+          toPRValue (ParameterValue pvps) =
+            if any isIdUsage pvps
               then PR.NeedsInput (map toPRValuePart pvps)
               else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
 
@@ -52,8 +108,7 @@ constructParseResult tem = foldr f PR.empty parameterStatements'
           toPRValuePart :: ParameterValuePart -> PR.ValuePart
           toPRValuePart (Simple s) = PR.StringPart s
           toPRValuePart (IdUsage id) = PR.ParameterPart id
-       in pr
-
+       in pr''
 
 parseTemplate :: String -> Either String Template
 parseTemplate template =
