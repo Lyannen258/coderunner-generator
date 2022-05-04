@@ -1,15 +1,6 @@
 module CoderunnerGenerator.SemanticAnalyzer where
 
 import Brick (getContext)
-import qualified CoderunnerGenerator.Parser as P
-import CoderunnerGenerator.Types.AbstractSyntaxTree as AST
-import CoderunnerGenerator.Types.ConstraintGraph (ConstraintGraph, (##>), (#>))
-import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
-import CoderunnerGenerator.Types.SymbolTable
-  ( SymbolInformation,
-    SymbolTable,
-  )
-import qualified CoderunnerGenerator.Types.SymbolTable as ST
 import Control.Monad (foldM, join)
 import Control.Monad.Trans.Reader
 import CoderunnerGenerator.Helper (singleton)
@@ -19,6 +10,8 @@ import Data.Set (fromList)
 import Debug.Trace
 import Lens.Micro (each, (^.), (^..), _2)
 import Lens.Micro.Extras (view)
+
+{-
 
 -- * Semantic Result
 
@@ -98,4 +91,4 @@ analyzeParameterPart part =
          in if isIncomplete
               then ST.incompleteValue valueParts
               else ST.finalValue concattedValues
-   in (id, ST.singleSymbol stValues, cg) -- It is possible to always use ST.singleSymbol. If needed, ST.add will convert it to a multi symbol.
+   in (id, ST.singleSymbol stValues, cg) -- It is possible to always use ST.singleSymbol. If needed, ST.add will convert it to a multi symbol. -}

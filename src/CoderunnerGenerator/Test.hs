@@ -1,31 +1,32 @@
 module CoderunnerGenerator.Test where
 
-import Test.HUnit
+import CoderunnerGenerator.ConfigGeneration
+import CoderunnerGenerator.Types.ParseResult as PR
 import Control.Monad.Trans.Reader
-import CoderunnerGenerator.Parser
+import Test.HUnit
 import Text.Megaparsec
 import Text.Pretty.Simple (pPrint)
+import qualified Data.Maybe
 
-{- import CoderunnerGenerator.SemanticAnalyzer (semanticAnalysis)
+simpleParseResultWithoutConstraints :: ParseResult
+simpleParseResultWithoutConstraints =
+  let pr = addValues PR.empty "p1" [Final "v1", Final "v2", Final "v3"]
+      pr' = addValues pr "p2" [Final "v1", Final "v2"]
+      pr'' = addValues pr' "p3" [Final "v1", Final "v2", Final "v3"]
+   in pr''
 
-firstExample :: Test
-firstExample =
-  TestCase
-    ( do
-        i <- readFile "example-files/01_copy.tmpl"
-        let res = runReader (runParserT coderunnerParser "" i) ["Task", "Solution", "PreAllocation", "Tests"]
-        case res of
-            Left err -> assertString $ errorBundlePretty err
-            Right x -> do {
-                pPrint x;
-                semanticAnalysis x;
-              }
+simpleParseResult :: ParseResult
+simpleParseResult = Data.Maybe.fromMaybe undefined maybePR
+  where
+    maybePR = addConstraint
+      simpleParseResultWithoutConstraints
+      ("p1", Final "v1")
+      ("p2", Final "v1")
 
-
-    ) -}
-
-
-import Text.Megaparsec.Char
-import Data.Void
-entlein :: IO ()
-entlein = parseTest (printChar :: Parsec Void String Char) "🦆"
+{- combinationsOfSimpleParseResult :: Test
+combinationsOfSimpleParseResult = TestCase t
+  where
+    t :: IO ()
+    t = do
+      let combs = allCombinations simpleParseResultWithoutConstraints
+      return () -}

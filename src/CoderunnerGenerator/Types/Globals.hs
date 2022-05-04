@@ -1,5 +1,6 @@
 module CoderunnerGenerator.Types.Globals
-  ( constructGlobals,
+  ( Globals,
+    constructGlobals,
     getParser,
     getGenerator,
     getTemplateFilePath,
@@ -13,15 +14,15 @@ import CoderunnerGenerator.Types.ParseResult
 import CoderunnerGenerator.Types.Configuration
 
 data Globals s = Globals
-  { parser :: String -> (ParseResult, s),
+  { parser :: String -> Either String (ParseResult, s),
     generator :: [Configuration] -> s -> [String],
     args :: Args
   }
 
-constructGlobals :: (String -> (ParseResult, s)) -> ([Configuration] -> s -> [String]) -> Args -> Globals s
+constructGlobals :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> [String]) -> Args -> Globals s
 constructGlobals = Globals
 
-getParser :: Globals s -> (String -> (ParseResult, s))
+getParser :: Globals s -> (String -> Either String (ParseResult, s))
 getParser = parser
 
 getGenerator :: Globals s -> ([Configuration] -> s -> [String])

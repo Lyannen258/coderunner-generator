@@ -2,17 +2,15 @@ module CoderunnerGenerator.Main where
 
 import CoderunnerGenerator.CmdArgs (Args)
 import qualified CoderunnerGenerator.CmdArgs as CmdArgs
-import CoderunnerGenerator.ConfigGeneration (generateConfigs)
-import CoderunnerGenerator.Generator
+import CoderunnerGenerator.ConfigGeneration (computeConfigurations)
 import CoderunnerGenerator.Helper
-import CoderunnerGenerator.Parser (parseTemplate)
-import qualified CoderunnerGenerator.SemanticAnalyzer as SA
-import qualified CoderunnerGenerator.Types.AbstractSyntaxTree as AST
-import qualified CoderunnerGenerator.Types.ConstraintGraph as CG
-import qualified CoderunnerGenerator.Types.SymbolTable as ST
+import CoderunnerGenerator.Types.App (App)
+import CoderunnerGenerator.Types.Globals
 import Control.Exception (SomeException, try)
 import Control.Monad (foldM_, sequence, when)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Reader (ReaderT, asks)
 import Data.Map (Map)
 import Data.Text.Lazy (unpack)
 import Data.Tree (drawTree)
@@ -24,47 +22,41 @@ import System.IO
 import Text.Megaparsec (ParseErrorBundle, errorBundlePretty, parse)
 import Text.Pretty.Simple (pPrint, pShowNoColor)
 
-main :: IO ()
-main = handleErrors $ do
-  args <- CmdArgs.executeParser
-  analyzeFile args
+main :: App s ()
+main = do
+  fileContent <- readTemplateFile
+  createOutputDirectory
 
-analyzeFile :: Args -> IO ()
-analyzeFile args = do
-  let filePath = CmdArgs.templateFile args
-  let amount = CmdArgs.amount args
-  let debug = CmdArgs.debugOutput args
-  let name = takeBaseName filePath
-
-  fileContent <- readFileContent filePath
-
-  createOutputDirectory filePath
-
-  let parseResult = parseTemplate fileContent [] -- TODO replace empty list with sections of ParserConfig
-  when debug $ writeParseResult filePath parseResult
-
-  let semanticResult = parseToSemantic parseResult >>= SA.semanticAnalysis
-  when debug $ writeSemanticResult filePath semanticResult
-
-  valueResult <- case semanticResult of
-    Right sr -> getValueTables amount sr
-    Left err -> return $ Left err
-
-  let finalResult = getFinalResult parseResult semanticResult valueResult name
-
-  writeFinalResult filePath finalResult
+  parser <- asks getParser
+  case parser fileContent of
+    Left s -> pPrint s
+    Right (parseResult, s) -> 
+      do 
+        configsE <- computeConfigurations parseResult
+        pPrint configsE
+        case configsE of
+          Left str -> pPrint str
+          Right configs -> do
+            pPrint configs
+            generator <- asks getGenerator
+            let results = generator configs s
+            pPrint results
 
 -- | Read content of the template file
-readFileContent :: String -> IO String
-readFileContent filePath = do
-  inputHandle <- openFile filePath ReadMode
-  hSetEncoding inputHandle utf8
-  hGetContents inputHandle
+readTemplateFile :: App s String
+readTemplateFile = do
+  filePath <- asks getTemplateFilePath
+  inputHandle <- liftIO $ openFile filePath ReadMode
+  liftIO $ hSetEncoding inputHandle utf8
+  liftIO $ hGetContents inputHandle
 
 -- | Create directory for the output files
-createOutputDirectory :: FilePath -> IO ()
-createOutputDirectory filePath = do
-  createDirectoryIfMissing True $ dropExtension filePath
+createOutputDirectory :: App s ()
+createOutputDirectory = do
+  filePath <- asks getTemplateFilePath
+  liftIO $ createDirectoryIfMissing True $ dropExtension filePath
+
+{-
 
 -- | Get the value result by asking the user for values or automatically generating configurations.
 getValueTables :: Maybe Int -> (ST.SymbolTable, CG.ConstraintGraph) -> IO (Either String [Map String [String]])
@@ -148,11 +140,4 @@ writeToFile inputFilePath fileName output = do
 
 -- * Error handling
 
-handleErrors :: IO () -> IO ()
-handleErrors action = do
-  res <- resIO
-  case res of
-    Left e -> print $ show e
-    _ -> return ()
-  where
-    resIO = try action :: IO (Either SomeException ())
+ -}

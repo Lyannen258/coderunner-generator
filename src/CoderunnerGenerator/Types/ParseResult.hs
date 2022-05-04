@@ -1,11 +1,17 @@
 module CoderunnerGenerator.Types.ParseResult
   ( ParseResult,
+    Constraint,
     ParameterName,
     Value (Final, NeedsInput),
     ValuePart (StringPart, ParameterPart),
     addValues,
     addConstraint,
-    empty
+    empty,
+    getParameterNames,
+    getParameterValues,
+    first,
+    second,
+    getConstraints
   )
 where
 
@@ -74,10 +80,10 @@ addValues pr@(ParseResult pc@(ParameterComposition ps cs)) pn vs =
       | otherwise = vs Seq.|> v
 
     newParameters :: [Parameter]
-    newParameters = foldr d [] ps ++ [Parameter pn allValues]
+    newParameters = foldl' d [] ps ++ [Parameter pn allValues]
 
-    d :: Parameter -> [Parameter] -> [Parameter]
-    d p@(Parameter name _) ps
+    d :: [Parameter] -> Parameter -> [Parameter]
+    d ps p@(Parameter name _)
       | name == pn = ps
       | otherwise = ps ++ [p]
 
@@ -121,9 +127,22 @@ getParameter (ParseResult (ParameterComposition ps _)) pn =
     f :: Parameter -> Bool
     f (Parameter name _) = name == pn
 
+-- | Get a List of the names of all contained Parameters
+getParameterNames :: ParseResult -> [ParameterName]
+getParameterNames (ParseResult (ParameterComposition ps _)) = 
+  map (\(Parameter name _) -> name) ps
+
 -- | Get the list of constraints from a 'ParseResult'
 getConstraints :: ParseResult -> [Constraint]
 getConstraints (ParseResult (ParameterComposition _ cs)) = cs
+
+-- | Get the first tuple of a constraint
+first :: Constraint -> (ParameterName, Int)
+first (Constraint x _) = x
+
+-- | Get the second tuple of a constraint
+second :: Constraint -> (ParameterName, Int)
+second (Constraint _ x) = x 
 
 -- | An empty parse result
 empty :: ParseResult

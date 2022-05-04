@@ -23,17 +23,19 @@ maintainer:         eriksson@wifa.uni-leipzig.de
 
 library
   exposed-modules:
-      CoderunnerGenerator.Parser,
       CoderunnerGenerator.SemanticAnalyzer,
-      CoderunnerGenerator.Generator,
       CoderunnerGenerator.Helper,
-      CoderunnerGenerator.Types.ConstraintGraph,
-      CoderunnerGenerator.Types.AbstractSyntaxTree,
-      CoderunnerGenerator.Types.SymbolTable,
+      CoderunnerGenerator.Types.Globals,
+      CoderunnerGenerator.Types.Configuration,
+      CoderunnerGenerator.Types.ParseResult,
+      CoderunnerGenerator.Types.App,
       CoderunnerGenerator.CmdArgs,
       CoderunnerGenerator.ConfigGeneration,
       CoderunnerGenerator.Interface,
+      CoderunnerGenerator.Main,
       CoderunnerGenerator.Test,
+      CPPCoderunner.Parser,
+      CPPCoderunner.AbstractSyntaxTree,
       CPPCoderunner.Generator
 
   if os(windows)
