@@ -15,8 +15,10 @@ import qualified Data.Sequence as Seq
 import Debug.Pretty.Simple
 import Lens.Micro.Extras (view)
 import System.Random (RandomGen, getStdGen, uniformR)
+import Control.Monad.Trans.Except (except, throwE)
+import Control.Monad.Trans.Class (lift)
 
-computeConfigurations :: ParseResult -> App s (Either String [Configuration])
+computeConfigurations :: ParseResult -> App s [Configuration]
 computeConfigurations pr = do
   let all = allCombinations pr
   let withoutForbidden = removeForbidden pr (pTrace ("Length all: " ++ show (length all)) all)
@@ -24,7 +26,7 @@ computeConfigurations pr = do
   let amount = fromMaybe 0 amountMaybe
   randomNumbers <- getRandomNumbers amount (length (pTrace ("Without forbidden: " ++ show withoutForbidden) withoutForbidden))
   let configurations = map (generateConfiguration pr withoutForbidden) (pTraceShowId randomNumbers)
-  return $ sequence configurations
+  sequence configurations
 
 allCombinations :: ParseResult -> [[(ParameterName, Int)]]
 allCombinations pr =
@@ -74,12 +76,12 @@ getNDistinct amountNumbers amountConfigs = fillToN []
         let (rand, newGen) = uniformR (0, amountConfigs - 1) std
          in fillToN (rand : acc) newGen
 
-generateConfiguration :: ParseResult -> [[(ParameterName, Int)]] -> Int -> Either String Configuration
+generateConfiguration :: ParseResult -> [[(ParameterName, Int)]] -> Int -> App s Configuration
 generateConfiguration pr configs rand =
   let randomConfig = configs !! rand
    in buildConfiguration empty randomConfig
   where
-    buildConfiguration :: Configuration -> [(ParameterName, Int)] -> Either String Configuration
+    buildConfiguration :: Configuration -> [(ParameterName, Int)] -> App s Configuration
     buildConfiguration c [] = return c
     buildConfiguration c (x : xs)
       | contains c (fst x) = buildConfiguration c xs
@@ -87,7 +89,7 @@ generateConfiguration pr configs rand =
         (_, remaining, newC) <- buildOneParameter x xs c
         buildConfiguration newC remaining
       where
-        buildOneParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> Either String (String, [(ParameterName, Int)], Configuration)
+        buildOneParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> App s (String, [(ParameterName, Int)], Configuration)
         buildOneParameter x xs c = case value of
           PR.Final s -> return (s, xs, addParameter (fst x) s [] c)
           PR.NeedsInput vps -> do
@@ -96,7 +98,7 @@ generateConfiguration pr configs rand =
           where
             value = PR.getParameterValues pr (fst x) `Seq.index` snd x
 
-            makeFinal :: (String, Configuration, [(ParameterName, Int)]) -> ValuePart -> Either String (String, Configuration, [(ParameterName, Int)])
+            makeFinal :: (String, Configuration, [(ParameterName, Int)]) -> ValuePart -> App s (String, Configuration, [(ParameterName, Int)])
             makeFinal (stringBuilder, c, xs) vp = case vp of
               PR.StringPart str -> return (stringBuilder ++ str, c, xs)
               PR.ParameterPart pn ->
@@ -106,7 +108,7 @@ generateConfiguration pr configs rand =
                  in case maybeValue of
                       Just str -> return (stringBuilder ++ str, c, xs)
                       Nothing -> case maybeSearchedX of
-                        Nothing -> Left $ paramNotFoundErr pn
+                        Nothing -> lift . throwE $ paramNotFoundErr pn
                         Just searchedX -> do
                           (paramValue, remainingXs', newC) <- buildOneParameter searchedX remainingXs c
                           return (stringBuilder ++ paramValue, newC, remainingXs)

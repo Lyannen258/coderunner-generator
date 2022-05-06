@@ -9,6 +9,8 @@ import CoderunnerGenerator.Types.Globals
 import Control.Exception (SomeException, try)
 import Control.Monad (foldM_, sequence, when)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, asks)
 import Data.Map (Map)
@@ -28,19 +30,14 @@ main = do
   createOutputDirectory
 
   parser <- asks getParser
-  case parser fileContent of
-    Left s -> pPrint s
-    Right (parseResult, s) -> 
-      do 
-        configsE <- computeConfigurations parseResult
-        pPrint configsE
-        case configsE of
-          Left str -> pPrint str
-          Right configs -> do
-            pPrint configs
-            generator <- asks getGenerator
-            let results = generator configs s
-            pPrint results
+  (parseResult, s) <- lift . except $ parser fileContent
+
+  configs <- computeConfigurations parseResult
+  pPrint configs
+
+  generator <- asks getGenerator
+  let results = generator configs s
+  pPrint results
 
 -- | Read content of the template file
 readTemplateFile :: App s String

@@ -1,18 +1,23 @@
-module CoderunnerGenerator.Interface where
+module CoderunnerGenerator.Interface (run) where
 
-import CoderunnerGenerator.Types.Globals
-import CoderunnerGenerator.Main
-import Control.Monad.Trans.Reader
 import qualified CoderunnerGenerator.CmdArgs as CmdArgs
-import CoderunnerGenerator.Types.ParseResult ( ParseResult )
-import CoderunnerGenerator.Types.Configuration ( Configuration )
-import Control.Exception ( SomeException, try ) 
+import CoderunnerGenerator.Main ( main )
+import CoderunnerGenerator.Types.Configuration (Configuration)
+import CoderunnerGenerator.Types.Globals ( constructGlobals )
+import CoderunnerGenerator.Types.ParseResult (ParseResult)
+import Control.Exception (SomeException, try)
+import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Reader (runReaderT)
+import Text.Pretty.Simple (pPrint)
 
 run :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> [String]) -> IO ()
 run parser generator = handleErrors $ do
   args <- CmdArgs.executeParser
   let g = constructGlobals parser generator args
-  runReaderT main g
+  res <- runExceptT (runReaderT main g)
+  case res of
+    Left s -> putStrLn s
+    Right _ -> putStrLn "No exceptions occured"
 
 handleErrors :: IO () -> IO ()
 handleErrors action = do
