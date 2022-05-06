@@ -115,14 +115,3 @@ generateConfiguration pr configs rand =
 
 paramNotFoundErr :: String -> String
 paramNotFoundErr pn = "Found usage of parameter " ++ pn ++ ", but it was never defined."
-
-{-
-
-generateConfigs :: Int -> (SymbolTable, ConstraintGraph) -> IO [Map String [String]]
-generateConfigs a (st, cg) = do
-  let configs = CG.configs cg
-  randomNumbers <- getRandomNumbers a (length configs)
-  let valueTables = map (generateValueTable configs) randomNumbers
-  return valueTables
-
- -}
