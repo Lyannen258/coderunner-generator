@@ -1,13 +1,16 @@
 module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 
 import CPPCoderunner.AbstractSyntaxTree
-import CoderunnerGenerator.Types.ParseResult (ParseResult)
+import CoderunnerGenerator.Helper (maybeToEither)
+import CoderunnerGenerator.Types.ParseResult (ParseResult, addMultiConstraint)
 import qualified CoderunnerGenerator.Types.ParseResult as PR
 import Control.Monad (foldM)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import Data.Foldable (foldl')
+import Data.Maybe (fromMaybe)
 import Data.Void (Void)
+import Debug.Pretty.Simple (pTraceShowId)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -77,22 +80,37 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
               let reqPRValues :: [PR.Value]
                   reqPRValues = map toPRValue (pp ^. values)
 
-                  prTemp :: ParseResult
-                  prTemp = PR.addValues pr' (pp ^. identifier) reqPRValues
+                  prTemp :: Either String ParseResult
+                  prTemp
+                    | length mainPRValues == length reqPRValues =
+                      return $ PR.addValues pr' (pp ^. identifier) reqPRValues
+                    | length mainPRValues == 1 && not (null reqPRValues) =
+                      return $ PR.addMultiValues pr' (pp ^. identifier) reqPRValues
+                    | otherwise =
+                      Left $ valueAmountMismatch (psMain ^. identifier) (pp ^. identifier) (length mainPRValues) (length reqPRValues)
 
                   addConstraints :: Either String ParseResult
                   addConstraints
-                    | length mainPRValues == length reqPRValues = foldM f prTemp (zip mainPRValues reqPRValues)
-                    | length mainPRValues == 1 && not (null reqPRValues) = foldM f prTemp (zip (repeat . head $ mainPRValues) reqPRValues)
-                    | otherwise = Left $ valueAmountMismatch (psMain ^. identifier) (pp ^. identifier) (length mainPRValues) (length reqPRValues)
+                    | length mainPRValues == length reqPRValues =
+                      foldl' f prTemp (zip mainPRValues reqPRValues)
+                    | length mainPRValues == 1 && not (null reqPRValues) =
+                      do 
+                        prTemp' <- prTemp
+                        maybeToEither
+                          (addMultiConstraint prTemp' (psMain ^. identifier, head mainPRValues) (pp ^. identifier, reqPRValues))
+                          "Cannot add multi constraint"
+                    | otherwise =
+                      Left $ valueAmountMismatch (psMain ^. identifier) (pp ^. identifier) (length mainPRValues) (length reqPRValues)
 
-                  f :: ParseResult -> (PR.Value, PR.Value) -> Either String ParseResult
-                  f pr v = case PR.addConstraint
-                    pr
-                    (psMain ^. identifier, fst v)
-                    (pp ^. identifier, snd v) of
-                    Nothing -> Left $ valueMissing (psMain ^. identifier) (show . fst $ v) (pp ^. identifier) (show . snd $ v)
-                    Just pr -> Right pr
+                  f :: Either String ParseResult -> (PR.Value, PR.Value) -> Either String ParseResult
+                  f prE v = do
+                    pr <- prE
+                    case PR.addConstraint
+                      pr
+                      (psMain ^. identifier, fst v)
+                      (pp ^. identifier, snd v) of
+                      Nothing -> Left $ valueMissing (psMain ^. identifier) (show . fst $ v) (pp ^. identifier) (show . snd $ v)
+                      Just pr -> Right pr
                in addConstraints
 
           toPRValue :: ParameterValue -> PR.Value

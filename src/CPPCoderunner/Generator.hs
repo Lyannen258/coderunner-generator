@@ -11,9 +11,14 @@ import Lens.Micro.Extras
 import System.FilePath (takeBaseName, takeDirectory)
 import Text.Read
 import Text.XML.Light
+import Text.Pretty.Simple ( pShow, pShowNoColor ) 
+import Data.Text.Lazy ( unpack )
 
 generate :: [Configuration] -> Template -> [String]
-generate configs tem = [""]
+generate configs tem = map f configs
+  where
+    f :: Configuration -> String
+    f config = unpack $ pShowNoColor config
 
 {-
 generateOutputs :: Template -> SymbolTable -> String -> [ValueTable] -> [Either String String]

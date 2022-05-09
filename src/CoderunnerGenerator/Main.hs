@@ -37,7 +37,7 @@ main = do
 
   generator <- asks getGenerator
   let results = generator configs s
-  pPrint results
+  writeToFile "result" (unlines results)
 
 -- | Read content of the template file
 readTemplateFile :: App s String
@@ -52,6 +52,16 @@ createOutputDirectory :: App s ()
 createOutputDirectory = do
   filePath <- asks getTemplateFilePath
   liftIO $ createDirectoryIfMissing True $ dropExtension filePath
+
+-- | Write content to a file in the output directory
+writeToFile :: String -> String -> App s ()
+writeToFile fileName output = do
+  inputFilePath <- asks getTemplateFilePath
+  let path = takeDirectory inputFilePath </> takeBaseName inputFilePath ++ fileName
+  outputHandle <- liftIO $ openFile path WriteMode
+  liftIO $ hSetEncoding outputHandle utf8
+  liftIO $ hPutStr outputHandle output
+  liftIO $ hClose outputHandle
 
 {-
 
@@ -126,14 +136,6 @@ writeFinalResult filePath (Left error) = writeToFile filePath "/Res.xml" error
 parseToSemantic :: Either (ParseErrorBundle String Void) a -> Either String a
 parseToSemantic (Left error) = Left "Error while Parsing"
 parseToSemantic (Right a) = Right a
-
-writeToFile :: String -> String -> String -> IO ()
-writeToFile inputFilePath fileName output = do
-  let path = takeDirectory inputFilePath </> takeBaseName inputFilePath ++ fileName
-  outputHandle <- openFile path WriteMode
-  hSetEncoding outputHandle utf8
-  hPutStr outputHandle output
-  hClose outputHandle
 
 -- * Error handling
 

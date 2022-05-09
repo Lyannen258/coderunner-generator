@@ -22,3 +22,6 @@ fillToTwenty s =
 
 singleton :: a -> [a]
 singleton a = [a]
+
+removeFirst :: (a, b, c) -> (b, c)
+removeFirst (_, b, c) = (b, c)
