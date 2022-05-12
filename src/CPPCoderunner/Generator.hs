@@ -4,41 +4,139 @@ import CPPCoderunner.AbstractSyntaxTree
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Types.Configuration
 import Control.Monad (foldM)
-import Data.List (intercalate)
+import Data.List (foldl', intercalate, nub)
 import qualified Data.Map as M
 import Data.Maybe (isNothing)
+import Data.Text.Lazy (unpack)
+import Debug.Pretty.Simple (pTraceShowId)
+import Lens.Micro ((^.))
 import Lens.Micro.Extras
 import System.FilePath (takeBaseName, takeDirectory)
+import Text.Pretty.Simple (pShow, pShowNoColor)
 import Text.Read
 import Text.XML.Light
-import Text.Pretty.Simple ( pShow, pShowNoColor ) 
-import Data.Text.Lazy ( unpack )
 
-generate :: [Configuration] -> Template -> [String]
-generate configs tem = map f configs
+functionCallInParameterErr :: String
+functionCallInParameterErr = "Function call in a parameter is not allowed"
+
+valueNotFoundErr :: String -> String
+valueNotFoundErr p = "No value found for usage of parameter '" ++ p ++ "'"
+
+shouldNotHappenErr :: String
+shouldNotHappenErr = "This error should not happen. Please ask the software provider."
+
+generate :: [Configuration] -> Template -> Either String [String]
+generate configs tem = mapM f configs
   where
-    f :: Configuration -> String
-    f config = unpack $ pShowNoColor config
+    f :: Configuration -> Either String String
+    f config = generateConfiguration config tem
 
-{-
-generateOutputs :: Template -> SymbolTable -> String -> [ValueTable] -> [Either String String]
-generateOutputs ast st name = foldr folder []
+generateConfiguration :: Configuration -> Template -> Either String String
+generateConfiguration conf tmpl = do
+  taskSection <- generateTaskSection conf tmpl
+  solutionSection <- generateSolutionSection conf tmpl
+  preAllocationSection <- generatePreAllocationSection conf tmpl
+  testSection <- generateTestSection conf tmpl
+  buildOutput conf taskSection solutionSection preAllocationSection testSection
+
+generateTaskSection :: Configuration -> Template -> Either String String
+generateTaskSection conf tmpl =
+  generateSection conf (tmpl ^. taskSection . body)
+
+generateSolutionSection :: Configuration -> Template -> Either String String
+generateSolutionSection conf tmpl =
+  generateSection conf (tmpl ^. solutionSection . body)
+
+generatePreAllocationSection :: Configuration -> Template -> Either String String
+generatePreAllocationSection conf tmpl =
+  generateSection conf (tmpl ^. preAllocationSection . body)
+
+generateTestSection :: Configuration -> Template -> Either String [(String, String)]
+generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCases)
   where
-    folder vt acc =
-      let nameNumber = name ++ (show . (+ 1) . length) acc
-       in generateOutput ast st nameNumber vt : acc
+    f :: TestCase -> Either String [(String, String)]
+    f tc =
+      let multiParams =
+            nub $
+              findMultiParams conf (tc ^. code)
+                ++ findMultiParams conf (tc ^. outcome)
 
-generateOutput :: Template -> SymbolTable -> String -> ValueTable -> Either String String
-generateOutput ast st name vt = do
-  let task = view (taskSection . body) ast
-  let sol = view (solutionSection . body) ast
-  let pre = view (preAllocationSection . body) ast
-  taskGen <- generateBody task st vt
-  solGen <- generateBody sol st vt
-  preGen <- generateBody pre st vt
-  -- let solTemp = createSolutionTemplate preGen "modulo"
-  let ret = intercalate "\n\n" [taskGen, solGen, preGen]
-  let xmlDoc =
+          getParamValueTuples :: Configuration -> String -> Either String [(String, String)]
+          getParamValueTuples conf parameterName = do
+            multiParamValues <- maybeToEither (getMultiValue conf parameterName) shouldNotHappenErr
+            return [(parameterName, v) | v <- multiParamValues]
+       in do
+            paramValueTuples <- mapM (getParamValueTuples conf) multiParams
+            let allCombos = combinations paramValueTuples
+            code <- generateMultiSection conf allCombos (tc ^. code)
+            outcome <- generateMultiSection conf allCombos (tc ^. outcome)
+            return $ zip (pTraceShowId code) outcome
+
+-- | Computes all combinations of elements of an arbitrary amount of lists
+--
+-- Example: @[[1, 2], [3], [4, 5]]@ -> @[[1, 3, 4], [1, 3, 5], [2, 3, 4], [2, 3, 5]]@
+combinations :: [[a]] -> [[a]]
+combinations = foldl' f []
+  where
+    f :: [[a]] -> [a] -> [[a]]
+    f [] l = map singleton l
+    f acc l = [a ++ [b] | a <- acc, b <- l]
+
+findMultiParams :: Configuration -> [SectionBodyComponent] -> [String]
+findMultiParams conf = foldr f []
+  where
+    f :: SectionBodyComponent -> [String] -> [String]
+    f (OutputComponent (Parameter (ParameterUsage _ name _))) acc =
+      case getMultiValue conf name of
+        Just _ -> acc ++ [name]
+        Nothing -> acc
+    f _ acc = acc
+
+generateMultiSection :: Configuration -> [[(String, String)]] -> [SectionBodyComponent] -> Either String [String]
+generateMultiSection config combinations sbcs = mapM f combinations
+  where
+    f :: [(String, String)] -> Either String String
+    f combination = foldM (buildSBC combination) "" sbcs
+
+    buildSBC :: [(String, String)] -> String -> SectionBodyComponent -> Either String String
+    buildSBC comb acc (TextComponent s) = return (acc ++ s)
+    buildSBC comb acc (OutputComponent (TextConstant s)) = return (acc ++ s)
+    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ id (Just cp)))) =
+      do
+        values <- evaluateMethod config id (cp ^. identifier) (cp ^. arguments)
+        return $ acc ++ intercalate "\n" values
+    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ id Nothing))) =
+      do
+        value <- case getSingleValue config id of
+          Just s -> return s
+          Nothing -> case lookup id comb of
+            Just ss -> return ss
+            Nothing -> Left $ valueNotFoundErr id
+        return $ acc ++ value
+
+generateSection :: Configuration -> [SectionBodyComponent] -> Either String String
+generateSection conf = foldM f ""
+  where
+    f :: String -> SectionBodyComponent -> Either String String
+    f acc (TextComponent s) = return (acc ++ s)
+    f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
+    f acc (OutputComponent (Parameter (ParameterUsage _ id (Just cp)))) =
+      do
+        values <- evaluateMethod conf id (cp ^. identifier) (cp ^. arguments)
+        return $ acc ++ intercalate "\n" values
+    f acc (OutputComponent (Parameter (ParameterUsage _ id Nothing))) =
+      do
+        value <- case getSingleValue conf id of
+          Just s -> return s
+          Nothing -> case getMultiValue conf id of
+            Just ss -> return $ intercalate "\n" ss
+            Nothing -> Left $ valueNotFoundErr id
+        return $ acc ++ value
+
+buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Either String String
+buildOutput conf task solution preAllocation tests =
+  let xmlDoc :: Element
+      xmlDoc =
         node (unqual "quiz") $
           add_attr
             (Attr (unqual "type") "coderunner")
@@ -46,12 +144,12 @@ generateOutput ast st name vt = do
                 (unqual "question")
                 [ node
                     (unqual "name")
-                    ( node (unqual "text") (CData CDataText name Nothing)
+                    ( node (unqual "text") (CData CDataText "" Nothing) -- TODO Set name once it is available
                     ),
                   node
                     (unqual "questiontext")
                     ( Attr (unqual "format") "html",
-                      node (unqual "text") (CData CDataText taskGen Nothing)
+                      node (unqual "text") (CData CDataText task Nothing)
                     ),
                   node (unqual "defaultgrade") (CData CDataText "1" Nothing),
                   node (unqual "penalty") (CData CDataText "0" Nothing),
@@ -65,10 +163,8 @@ generateOutput ast st name vt = do
                   node (unqual "showsource") (CData CDataText "0" Nothing),
                   node (unqual "answerboxlines") (CData CDataText "18" Nothing),
                   node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
-                  node (unqual "answerpreload") (CData CDataVerbatim preGen Nothing),
-                  -- #TODO template for the coderunner execution  node (unqual "template") (CData CDataVerbatim preGen Nothing)
-                  -- node (unqual "template") (CData CDataVerbatim solTemp Nothing),
-                  node (unqual "answer") (CData CDataVerbatim solGen Nothing),
+                  node (unqual "answerpreload") (CData CDataVerbatim preAllocation Nothing),
+                  moodleTemplate solution,
                   node (unqual "validateonsave") (CData CDataText "1" Nothing),
                   node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
                   node (unqual "templateparamslang") (CData CDataText "twig" Nothing),
@@ -78,15 +174,66 @@ generateOutput ast st name vt = do
                   node (unqual "attachments") (CData CDataText "0" Nothing),
                   node (unqual "attachmentsrequired") (CData CDataText "0" Nothing),
                   node (unqual "maxfilesize") (CData CDataText "10240" Nothing),
-                  node (unqual "displayfeedback") (CData CDataText "1" Nothing)
-                  -- #TODO testcases for each input value.
+                  node (unqual "displayfeedback") (CData CDataText "1" Nothing),
+                  node (unqual "testcases") (testNodes tests)
                 ]
             )
-  return $ ppTopElement xmlDoc
+   in return $ ppTopElement xmlDoc
+
+testNodes :: [(String, String)] -> [Element]
+testNodes = map f
+  where
+    f :: (String, String) -> Element
+    f (code, outcome) =
+      node
+        (unqual "testcase")
+        [ node
+            (unqual "testcode")
+            (node (unqual "text") (CData CDataVerbatim code Nothing)),
+          node
+            (unqual "expected")
+            (node (unqual "text") (CData CDataVerbatim outcome Nothing))
+        ]
+
+moodleTemplate :: String -> Element
+moodleTemplate solution =
+  node (unqual "template") (CData CDataVerbatim t Nothing)
+  where
+    t =
+      unlines
+        [ "#include <iostream>",
+          "#include <fstream>",
+          "#include <string>",
+          "#include <cmath>",
+          "#include <vector>",
+          "#include <algorithm>",
+          "",
+          "using namespace std;",
+          "#define SEPARATOR \"#<ab@17943918#@>#\"",
+          "",
+          "{{ STUDENT_ANSWER }}",
+          ""
+        ]
+        ++ solution
+        ++ unlines
+          [ "",
+            "int main() {",
+            "{% for TEST in TESTCASES %}",
+            "   {",
+            "    {{ TEST.extra }};",
+            "    {{ TEST.testcode }};",
+            "   }",
+            "    {% if not loop.last %}cout << SEPARATOR << endl;{% endif %}",
+            "{% endfor %}",
+            "    return 0;",
+            "}"
+          ]
 
 --createSolutionTemplate :: String -> String -> String
 --createSolutionTemplate haystack needle = strReplace needle "solution" haystack
 -- Perhapts using Regex-> Text.Regex subRegex sieht da ganz gut aus.
+
+{-
 
 generateBody :: Mixed -> SymbolTable -> ValueTable -> Either String String
 generateBody m st vt = do

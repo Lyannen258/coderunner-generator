@@ -10,8 +10,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad (foldM_, sequence, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Except ( except, runExceptT )
 import Control.Monad.Trans.Reader (ReaderT, asks)
 import Data.Map (Map)
 import Data.Text.Lazy (unpack)
@@ -36,8 +35,9 @@ main = do
   pPrint configs
 
   generator <- asks getGenerator
-  let results = generator configs s
-  writeToFile "result" (unlines results)
+  results <- lift . except $ generator configs s
+  foldM_ (\acc s -> writeToFile ("result" ++ show acc ++ ".xml") s >> return (acc + 1)) 1 results -- TODO put in separate function
+  writeToFile "result.xml" (unlines results)
 
 -- | Read content of the template file
 readTemplateFile :: App s String
@@ -57,7 +57,7 @@ createOutputDirectory = do
 writeToFile :: String -> String -> App s ()
 writeToFile fileName output = do
   inputFilePath <- asks getTemplateFilePath
-  let path = takeDirectory inputFilePath </> takeBaseName inputFilePath ++ fileName
+  let path = takeDirectory inputFilePath </> takeBaseName inputFilePath </> fileName
   outputHandle <- liftIO $ openFile path WriteMode
   liftIO $ hSetEncoding outputHandle utf8
   liftIO $ hPutStr outputHandle output

@@ -58,7 +58,7 @@ data ParameterBody = ParameterBody
   }
   deriving (Show)
 
--- | Represents an enumeration statement
+-- | Represents parameter statement
 data ParameterStatement = ParameterStatement
   { parameterStatementPosition :: Position,
     parameterStatementMain :: ParameterPart,
@@ -66,7 +66,7 @@ data ParameterStatement = ParameterStatement
   }
   deriving (Show)
 
--- | Represents an enumeration part
+-- | Represents a parameter part
 --
 -- Consists of an identifier and a value list
 data ParameterPart = ParameterPart

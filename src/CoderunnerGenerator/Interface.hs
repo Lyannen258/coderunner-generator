@@ -10,7 +10,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import Text.Pretty.Simple (pPrint)
 
-run :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> [String]) -> IO ()
+run :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> Either String [String]) -> IO ()
 run parser generator = handleErrors $ do
   args <- CmdArgs.executeParser
   let g = constructGlobals parser generator args

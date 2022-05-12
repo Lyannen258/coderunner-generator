@@ -8,13 +8,13 @@ Task:
 Complete the given function so that its “result” is defined as {{ type }} and returns the {{ operation }} of the two
 parameters passed to the function by value.
 Solution:
-auto {{ operation }}({{ type }} m, {{ type }} n)
+auto solution({{ type }} m, {{ type }} n)
 {
     {{ type }} result = m {{ operator }} n;
     return result;
 }
 PreAllocation:
-auto {{ operator }} ({{ type }} m, {{ type }} n)
+auto {{ operation }} ({{ type }} m, {{ type }} n)
 {
     //Input your code here
     cout << "{{ "{{" }}" << endl; {- How to output reserved keywords/symbols/characters / Works with single and double quotes -}
@@ -22,8 +22,8 @@ auto {{ operator }} ({{ type }} m, {{ type }} n)
 }
 Tests: {- This is a comment -}
 Code:
-if({{ operation }}({{ input }}) == solution({{ input }}) {
-    cout << “true”;
+if({{ operation }}({{ input }}) == solution({{ input }})) {
+    cout << "true";
 }
 Outcome:
 true

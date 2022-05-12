@@ -25,7 +25,7 @@ computeConfigurations pr = do
   amountMaybe <- asks getAmount
   let amount = fromMaybe 0 amountMaybe
   randomNumbers <- getRandomNumbers amount (length withoutForbidden)
-  let configurations = map (generateConfiguration pr withoutForbidden) (pTraceShowId randomNumbers)
+  let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
   sequence configurations
 
 allCombinations :: ParseResult -> [[(ParameterName, Int)]]
