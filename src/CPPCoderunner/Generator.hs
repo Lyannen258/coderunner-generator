@@ -93,7 +93,9 @@ findMultiParams conf = foldr f []
     f _ acc = acc
 
 generateMultiSection :: Configuration -> [[(String, String)]] -> [SectionBodyComponent] -> Either String [String]
-generateMultiSection config combinations sbcs = mapM f combinations
+generateMultiSection config combinations sbcs 
+  | (not . null) combinations = mapM f combinations
+  | otherwise = singleton <$> f []
   where
     f :: [(String, String)] -> Either String String
     f combination = foldM (buildSBC combination) "" sbcs
