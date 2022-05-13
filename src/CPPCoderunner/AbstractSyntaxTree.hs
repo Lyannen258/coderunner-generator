@@ -69,10 +69,15 @@ data ParameterStatement = ParameterStatement
 -- | Represents a parameter part
 --
 -- Consists of an identifier and a value list
-data ParameterPart = ParameterPart
-  { parameterPartIdentifier :: Identifier,
-    parameterPartValues :: [ParameterValue]
-  }
+data ParameterPart
+  = SingleParameterPart
+      { parameterPartIdentifier :: Identifier,
+        parameterPartValues :: [ParameterValue]
+      }
+  | MultiParameterPart
+      { parameterPartIdentifier :: Identifier,
+        parameterPartValueRanges :: [[ParameterValue]]
+      }
   deriving (Show)
 
 -- | Represents a Parameter Value

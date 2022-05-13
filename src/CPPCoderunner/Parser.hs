@@ -94,7 +94,7 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
                     | length mainPRValues == length reqPRValues =
                       foldl' f prTemp (zip mainPRValues reqPRValues)
                     | length mainPRValues == 1 && not (null reqPRValues) =
-                      do 
+                      do
                         prTemp' <- prTemp
                         maybeToEither
                           (addMultiConstraint prTemp' (psMain ^. identifier, head mainPRValues) (pp ^. identifier, reqPRValues))
@@ -132,7 +132,7 @@ parseTemplate :: String -> Either String Template
 parseTemplate template =
   let result = Text.Megaparsec.parse coderunnerParser "" template
    in case result of
-        Left peb -> Left $ show peb
+        Left peb -> Left $ errorBundlePretty peb
         Right tem -> Right tem
 
 -- * Section headlines
@@ -214,13 +214,24 @@ parameterPartParser :: Parser ParameterPart
 parameterPartParser = do
   identifier <- identifierParser
   openParenth
-  valueList <- valueListParser
+  parameterPart <- valueListParser identifier
   closingParenth
-  return $
-    ParameterPart identifier valueList
+  return parameterPart
 
-valueListParser :: Parser [ParameterValue]
-valueListParser = sepBy valueParser comma
+valueListParser :: String -> Parser ParameterPart
+valueListParser id =
+  (MultiParameterPart id <$> multiValueListParser)
+   <|> (SingleParameterPart id <$> singleValueListParser)
+
+singleValueListParser :: Parser [ParameterValue]
+singleValueListParser = sepBy valueParser comma
+
+multiValueListParser :: Parser [[ParameterValue]]
+multiValueListParser = sepBy1 valueRangeParser comma
+
+valueRangeParser :: Parser [ParameterValue]
+valueRangeParser =
+  openSquare *> singleValueListParser <* closingSquare
 
 valueParser :: Parser ParameterValue
 valueParser = do
@@ -371,6 +382,12 @@ openParenth = lexeme (char '(')
 
 closingParenth :: Parser Char
 closingParenth = lexeme (char ')')
+
+openSquare :: Parser Char
+openSquare = lexeme (char '[')
+
+closingSquare :: Parser Char
+closingSquare = lexeme (char ']')
 
 -- | Do not consume whitespace, because string begins
 openQuotes :: Parser Char
