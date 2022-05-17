@@ -3,25 +3,24 @@ module CoderunnerGenerator.Test where
 import CoderunnerGenerator.ConfigGeneration
 import CoderunnerGenerator.Types.ParseResult as PR
 import Control.Monad.Trans.Reader
+import qualified Data.Maybe
 import Test.HUnit
 import Text.Megaparsec
 import Text.Pretty.Simple (pPrint)
-import qualified Data.Maybe
 
-simpleParseResultWithoutConstraints :: ParseResult
-simpleParseResultWithoutConstraints =
-  let pr = addValues PR.empty "p1" [Final "v1", Final "v2", Final "v3"]
-      pr' = addValues pr "p2" [Final "v1", Final "v2"]
-      pr'' = addValues pr' "p3" [Final "v1", Final "v2", Final "v3"]
-   in pr''
+simpleParseResultWithoutConstraints :: Either String ParseResult
+simpleParseResultWithoutConstraints = do
+  pr <- addParameter PR.empty (PR.singleParam "p1" [Final "v1", Final "v2", Final "v3"])
+  pr' <- addParameter pr (PR.singleParam "p2" [Final "v1", Final "v2"])
+  addParameter pr' (PR.singleParam "p3" [Final "v1", Final "v2", Final "v3"])
 
-simpleParseResult :: ParseResult
-simpleParseResult = Data.Maybe.fromMaybe undefined maybePR
-  where
-    maybePR = addConstraint
-      simpleParseResultWithoutConstraints
-      ("p1", Final "v1")
-      ("p2", Final "v1")
+simpleParseResult :: Either String ParseResult
+simpleParseResult = do
+  pr <- simpleParseResultWithoutConstraints
+  addConstraint
+    pr
+    ("p1", PR.singleValue $ Final "v1")
+    ("p2", PR.singleValue $ Final "v1")
 
 {- combinationsOfSimpleParseResult :: Test
 combinationsOfSimpleParseResult = TestCase t

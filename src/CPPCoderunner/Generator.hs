@@ -70,7 +70,7 @@ generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCas
             let allCombos = combinations paramValueTuples
             code <- generateMultiSection conf allCombos (tc ^. code)
             outcome <- generateMultiSection conf allCombos (tc ^. outcome)
-            return $ zip (pTraceShowId code) outcome
+            return $ zip code outcome
 
 -- | Computes all combinations of elements of an arbitrary amount of lists
 --

@@ -1,31 +1,36 @@
 Parameter:
-$TYPE(int,double,float)
-$INPUT({2,2,2};{3,3,3};{3,2,4})
-$STATEMENT(@RIGHTANSWER, @WRONGANSWER, ...)
-$FIRSTSTATEMENT($STATEMENT(2*a,3*a,a*b))
-$SECONDSTATEMENT($STATEMENT(-b,+c,*a))
-$THIRDSTATEMENT($STATEMENT(*c,*5,+c))
-Aufgabenstellung:
-The shown functions are written based on the following specifications: - The function and variables are of type $TYPE. -
+type("int", "double", "float")
+input(["2,2,2", "3,3,3", "3,2,4"])
+firstWrong("3 * a", "a * b")
+secondWrong("+ c", "* a")
+thirdWrong("* 5", "+ c")
+Task:
+The shown functions are written based on the following specifications: 
+    - The function and variables are of type {{ type }}.
+    - Firstly, the variable a is multiplied by 2 and assigned to temp.
+    - Secondly, b is subtracted from temp.
+    - Thirdly, temp is multiplied by c.
 There are errors in the code. Find and correct them errors.
-Lösung:
-$TYPE function ($TYPE a, $TYPE b, $TYPE c){
-$TYPE temp;
-temp = $FIRSTSTATEMENT->RIGHTANSWER;
-temp = temp $SECONDSTATEMENT->RIGHTANSWER;
-temp = temp $THIRDSTATEMENT->RIGHTANSWER;
-return temp;
+Solution:
+{{ type }} solution({{type}} a, {{type}} b, {{type}} c){
+    {{type}} temp;
+    temp = 2 * a;
+    temp = temp - b;
+    temp = temp * c;
+    return temp;
 }
-Vorbelegung:
-$TYPE function ($TYPE a, $TYPE b, $TYPE c){
-$TYPE temp;
-temp = $FIRSTSTATEMENT->WRONGANSWER;
-temp = temp $SECONDSTATEMENT->WRONGANSWER;
-temp = temp $THIRDSTATEMENT->WRONGANSWER;
-return temp;
+PreAllocation:
+{{ type }} function({{type}} a, {{type}} b, {{type}} c){
+    {{type}} temp;
+    temp = {{ firstWrong }};
+    temp = temp {{ secondWrong }};
+    temp = temp {{ thirdWrong }};
+    return temp;
 }
 Tests:
-if(function($INPUT)== solution($INPUT)){
-    cout << ‘true’;
+Code:
+if(function({{input}}) == solution({{input}})){
+    cout << "true";
 }
-Expected Outcome: true
+Outcome:
+true

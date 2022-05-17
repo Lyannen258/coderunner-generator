@@ -7,9 +7,13 @@ ParameterBody = ParameterStatement {, ParameterStatement};
 
 ParameterStatement = ParameterPart, [Requires, ParameterPart]
 
-ParameterPart = Identifier, "(", ValueList, ")"
+ParameterPart = Identifier, "(", ( ValueList | MultiValueList ), ")"
+
 ValueList = Value {, ",", Value}
 Value = "\"", {StringChar | IdentifierUsage}, "\"" (* Vielleicht kann man auch noch eine richtige ParameterUsage hier nutzen *)
+
+MultiValueList = ValueRange {, ",", ValueRange}
+ValueRange = "[", ValueList, "]"
 
 IdentifierUsage = "{{", Identifier, "}}"
 

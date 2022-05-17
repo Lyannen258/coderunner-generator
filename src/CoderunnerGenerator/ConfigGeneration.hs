@@ -94,20 +94,20 @@ generateConfiguration pr configs rand =
           buildConfiguration newC remaining
       where
         buildOneSingleParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> App s (String, [(ParameterName, Int)], Configuration)
-        buildOneSingleParameter x xs c = case value of
-          PR.Final s -> return (s, xs, addSingleParameter (fst x) s [] c)
-          PR.NeedsInput vps -> do
-            (value, newConfig, newXs) <- foldM makeFinal ("", c, xs) vps
-            return (value, newXs, newConfig)
-          where
-            value = PR.getSingleParameterValues pr (fst x) `Seq.index` snd x
+        buildOneSingleParameter x xs c = do
+          value <- lift . except $ uncurry (PR.getAtIndexSingle pr) x
+          case value of
+            PR.Final s -> return (s, xs, addSingleParameter (fst x) s [] c)
+            PR.NeedsInput vps -> do
+              (value, newConfig, newXs) <- foldM makeFinal ("", c, xs) vps
+              return (value, newXs, newConfig)
 
         buildOneMultiParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> App s ([String], [(ParameterName, Int)], Configuration)
         buildOneMultiParameter x xs c = do
+          values <- lift . except $ uncurry (PR.getAtIndexMulti pr) x
           (newValue, newXs, newConfig) <- foldM f ([], xs, c) values
           return (newValue, newXs, addMultiParameter (fst x) newValue [] newConfig)
           where
-            values = PR.getMultiParameterValues pr (fst x) `Seq.index` snd x
 
             f :: ([String], [(ParameterName, Int)], Configuration) -> PR.Value -> App s ([String], [(ParameterName, Int)], Configuration)
             f (acc, xs, conf) value = case value of

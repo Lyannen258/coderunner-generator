@@ -1,16 +1,15 @@
 Parameter:
-$CHOICE({$NUMERAL,$NUMBER})
-$NUMERAL(I,V,X,L,C,D,M) REQUIRES $NUMBER(1,5,10,50,100,500,1000)
-$CHOICES({if(numeral=='$NUMERAL') return $NUMBER;})
-Aufgabenstellung:
+numeral([("I", "1"), ("V", "5")]) 
+choices("if(numeral=='{{ numeral.get(0) }}') return {{ numeral.get(1) }};")
+Task:
 Complete the given code so that it returns the number corresponding to the roman numeral. Roman numeral to number ({I,1};{V,5};{X,10};{L,50};{C,100};{D,500};{M,1000})
-Lösung:
-int NumeralToNumber(char numeral){
-    $CHOICES->ALL()
+Solution:
+int solution(char numeral){
+    {{choices.all()}}
 }
-Vorbelegung:
+PreAllocation:
 int NumeralToNumber(char numeral){
-    $CHOICES->CHOOSE_AT_RANDOM(4)
+    {{choices.choose_at_random(4)}}
 }
 Tests:
 cout << NumeralToNumber('I');

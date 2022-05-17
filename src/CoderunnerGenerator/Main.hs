@@ -10,7 +10,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad (foldM_, sequence, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except ( except, runExceptT )
+import Control.Monad.Trans.Except (except, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, asks)
 import Data.Map (Map)
 import Data.Text.Lazy (unpack)
@@ -30,14 +30,15 @@ main = do
 
   parser <- asks getParser
   (parseResult, s) <- lift . except $ parser fileContent
+  debugOutput parseResult
 
   configs <- computeConfigurations parseResult
-  pPrint configs
+  debugOutput configs
 
   generator <- asks getGenerator
   results <- lift . except $ generator configs s
   foldM_ (\acc s -> writeToFile ("result" ++ show acc ++ ".xml") s >> return (acc + 1)) 1 results -- TODO put in separate function
-  writeToFile "result.xml" (unlines results)
+  liftIO $ putStrLn $ "Generated " ++ (show . length) results ++ " instances"
 
 -- | Read content of the template file
 readTemplateFile :: App s String
@@ -62,6 +63,11 @@ writeToFile fileName output = do
   liftIO $ hSetEncoding outputHandle utf8
   liftIO $ hPutStr outputHandle output
   liftIO $ hClose outputHandle
+
+debugOutput :: Show a => a -> App s ()
+debugOutput a = do
+  dbg <- asks getDebugOutputFlag
+  liftIO $ when dbg (pPrint a)
 
 {-
 
