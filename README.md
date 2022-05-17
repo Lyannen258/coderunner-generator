@@ -13,8 +13,8 @@ If you are on windows, you can download the required tools from here: https://ww
 
 ## Getting Started
 
-If you cloned the repository to your machine, move to the root directory and execute `stack build`.
+When you have cloned the repository to your machine, move to the root directory and execute `stack build`.
 
-After that, you can run the program with a template file by issuing `stack exec coderunner-generator _path-to-template-file_`. For the first included example, run `stack exec coderunner-generator example-files/01_writing_a_statement.txt`.
+After that, you can run the program with a template file by issuing `stack exec coderunner-generator -- _path-to-template-file_ -a _amount_of_instances_`. For the first included example, run `stack exec coderunner-generator -- example-files/01_writing_a_statement.tmpl -a 5`.
 
 To generate the documentation, run `stack haddock`. You can then open it in the browser with `stack haddock --open coderunner-generator`
