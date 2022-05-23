@@ -1,8 +1,8 @@
 module CoderunnerGenerator.ConfigGeneration (computeConfigurations) where
 
-import CoderunnerGenerator.Helper (removeFirst, singleton)
+import CoderunnerGenerator.Helper (maybeToEither, removeFirst, singleton)
 import CoderunnerGenerator.Types.App
-import CoderunnerGenerator.Types.Configuration
+import CoderunnerGenerator.Types.Configuration as C
 import CoderunnerGenerator.Types.Globals (getAmount)
 import CoderunnerGenerator.Types.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
 import qualified CoderunnerGenerator.Types.ParseResult as PR
@@ -10,13 +10,18 @@ import Control.Monad (foldM)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE)
 import Control.Monad.Trans.Reader (asks)
-import Data.Foldable (find, foldl')
+import Data.Either (lefts, rights)
+import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (delete, nub)
 import Data.Maybe (fromMaybe)
 import qualified Data.Sequence as Seq
 import Debug.Pretty.Simple
 import Lens.Micro.Extras (view)
 import System.Random (RandomGen, getStdGen, uniformR)
+
+type ConfigListRaw = [[(ParameterName, Int)]]
+
+type ConfigRaw = [(ParameterName, Int)]
 
 computeConfigurations :: ParseResult -> App s [Configuration]
 computeConfigurations pr = do
@@ -28,29 +33,29 @@ computeConfigurations pr = do
   let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
   sequence configurations
 
-allCombinations :: ParseResult -> [[(ParameterName, Int)]]
+allCombinations :: ParseResult -> ConfigListRaw
 allCombinations pr =
   let parameterNames :: [ParameterName]
       parameterNames = PR.getParameterNames pr
 
-      parameterValueTuples :: [[(ParameterName, Int)]]
+      parameterValueTuples :: ConfigListRaw
       parameterValueTuples = map f parameterNames
         where
-          f :: ParameterName -> [(ParameterName, Int)]
+          f :: ParameterName -> ConfigRaw
           f pn = zip (repeat pn) [0 .. PR.countValues pr pn - 1]
 
-      f :: [[(ParameterName, Int)]] -> [(ParameterName, Int)] -> [[(ParameterName, Int)]]
+      f :: ConfigListRaw -> ConfigRaw -> ConfigListRaw
       f [] parameterValueTuple = map singleton parameterValueTuple
       f acc parameterValueTuple = concatMap f' acc
         where
-          f' :: [(ParameterName, Int)] -> [[(ParameterName, Int)]]
+          f' :: ConfigRaw -> ConfigListRaw
           f' config = map (\pv -> config ++ [pv]) parameterValueTuple
    in foldl' f [] parameterValueTuples
 
-removeForbidden :: ParseResult -> [[(ParameterName, Int)]] -> [[(ParameterName, Int)]]
+removeForbidden :: ParseResult -> ConfigListRaw -> ConfigListRaw
 removeForbidden pr = filter f
   where
-    f :: [(ParameterName, Int)] -> Bool
+    f :: ConfigRaw -> Bool
     f config = all constraintFulfilled constraints
       where
         constraintFulfilled :: Constraint -> Bool
@@ -76,60 +81,118 @@ getNDistinct amountNumbers amountConfigs = fillToN []
         let (rand, newGen) = uniformR (0, amountConfigs - 1) std
          in fillToN (rand : acc) newGen
 
-generateConfiguration :: ParseResult -> [[(ParameterName, Int)]] -> Int -> App s Configuration
-generateConfiguration pr configs rand =
-  let randomConfig = configs !! rand
-   in buildConfiguration empty randomConfig
+generateConfiguration :: ParseResult -> ConfigListRaw -> Int -> App s Configuration
+generateConfiguration pr configs rand = snd <$> foldM f (configRaw, empty) configRaw
   where
-    buildConfiguration :: Configuration -> [(ParameterName, Int)] -> App s Configuration
-    buildConfiguration c [] = return c
-    buildConfiguration c (x : xs)
-      | contains c (fst x) = buildConfiguration c xs
-      | otherwise =
-        do
-          (remaining, newC) <-
-            if isSingle pr (fst x)
-              then removeFirst <$> buildOneSingleParameter x xs c
-              else removeFirst <$> buildOneMultiParameter x xs c
-          buildConfiguration newC remaining
-      where
-        buildOneSingleParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> App s (String, [(ParameterName, Int)], Configuration)
-        buildOneSingleParameter x xs c = do
-          value <- lift . except $ uncurry (PR.getAtIndexSingle pr) x
-          case value of
-            PR.Final s -> return (s, xs, addSingleParameter (fst x) s [] c)
-            PR.NeedsInput vps -> do
-              (value, newConfig, newXs) <- foldM makeFinal ("", c, xs) vps
-              return (value, newXs, newConfig)
+    configRaw = configs !! rand
 
-        buildOneMultiParameter :: (ParameterName, Int) -> [(ParameterName, Int)] -> Configuration -> App s ([String], [(ParameterName, Int)], Configuration)
-        buildOneMultiParameter x xs c = do
-          values <- lift . except $ uncurry (PR.getAtIndexMulti pr) x
-          (newValue, newXs, newConfig) <- foldM f ([], xs, c) values
-          return (newValue, newXs, addMultiParameter (fst x) newValue [] newConfig)
-          where
+    f :: (ConfigRaw, Configuration) -> (ParameterName, Int) -> App s (ConfigRaw, Configuration)
+    f (cr, c) x
+      | contains c (fst x) = return (cr, c)
+      | otherwise = case PR.getParameter pr (fst x) of
+        Nothing -> lift . except . Left $ "Parameter " ++ fst x ++ " not found."
+        Just pa -> buildParameter pr cr c pa
 
-            f :: ([String], [(ParameterName, Int)], Configuration) -> PR.Value -> App s ([String], [(ParameterName, Int)], Configuration)
-            f (acc, xs, conf) value = case value of
-              PR.Final s -> return (acc ++ [s], xs, conf)
-              PR.NeedsInput vps -> do
-                (newValue, newConfig, newXs) <- foldM makeFinal ("", c, xs) vps
-                return (acc ++ [newValue], newXs, newConfig)
+buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App s (ConfigRaw, Configuration)
+buildParameter pr cr c p@(PR.Parameter n vs)
+  | PR.containsMultiParamUsage pr n =
+    if checkMultiParamUsageReqs pr p
+      then do
+        (vs', newC) <- buildWithMultiParamUsage pr cr c p
+        return (cr, C.addMultiParameter n vs' [vs'] newC)
+      else (lift . throwE) incorrectUsageOfMultiParam
+  | otherwise = do
+    i <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
+    (singleMultiE, newCR, newC) <- foldM (buildParameterValue pr) ([], cr, c) vs
+    newC' <- addToConfiguration newC n (snd i) singleMultiE
+    return (newCR, newC')
 
-        makeFinal :: (String, Configuration, [(ParameterName, Int)]) -> ValuePart -> App s (String, Configuration, [(ParameterName, Int)])
-        makeFinal (stringBuilder, c, xs) vp = case vp of
-          PR.StringPart str -> return (stringBuilder ++ str, c, xs)
-          PR.ParameterPart pn ->
-            let maybeValue = getSingleValue c pn
-                maybeSearchedX = find (\x -> fst x == pn) xs
-                remainingXs = delete x xs
-             in case maybeValue of
-                  Just str -> return (stringBuilder ++ str, c, xs)
-                  Nothing -> case maybeSearchedX of
-                    Nothing -> lift . throwE $ paramNotFoundErr pn
-                    Just searchedX -> do
-                      (paramValue, remainingXs', newC) <- buildOneSingleParameter searchedX remainingXs c
-                      return (stringBuilder ++ paramValue, newC, remainingXs)
+addToConfiguration :: Configuration -> PR.ParameterName -> Int -> [Either String [String]] -> App s Configuration
+addToConfiguration c n i singleMultiE
+  | not (null ls) && null rs && i < length ls =
+    return $ C.addSingleParameter n (ls !! i) ls c
+  | not (null rs) && null ls && i > length rs =
+    return $ C.addMultiParameter n (rs !! i) rs c
+  | otherwise = lift . throwE $ "Something went wrong"
+  where
+    ls = lefts singleMultiE
+    rs = rights singleMultiE
+
+checkMultiParamUsageReqs :: ParseResult -> PR.Parameter -> Bool
+checkMultiParamUsageReqs pr p@(PR.Parameter n vs) =
+  isSingle pr n && length vs == 1
+
+buildParameterValue :: ParseResult -> ([Either String [String]], ConfigRaw, Configuration) -> PR.ParameterValue -> App s ([Either String [String]], ConfigRaw, Configuration)
+buildParameterValue pr (l, cr, c) pv = case pv of
+  PR.SingleValue va -> do
+    (v, newCR, newC) <- buildValue pr ("", cr, c) va
+    return (l ++ [Left v], newCR, newC)
+  PR.MultiValue vs -> do
+    (ss, newCR, newC) <- foldM f ([], cr, c) vs
+    return (l ++ [Right ss], newCR, newC)
+    where
+      f :: ([String], ConfigRaw, Configuration) -> PR.Value -> App s ([String], ConfigRaw, Configuration)
+      f (ss, cr, c) v = do
+        (nextS, newCR, newC) <- buildValue pr ("", cr, c) v
+        return (ss ++ [nextS], newCR, newC)
+
+buildValue :: ParseResult -> (String, ConfigRaw, Configuration) -> PR.Value -> App s (String, ConfigRaw, Configuration)
+buildValue pr (s, cr, c) v = case v of
+  PR.Final str -> return (s ++ str, cr, c)
+  PR.NeedsInput vps -> do
+    (value, cr', c') <- foldM (makeFinal pr) ("", cr, c) vps
+    return (value, cr', c')
+
+makeFinal :: ParseResult -> (String, ConfigRaw, Configuration) -> ValuePart -> App s (String, ConfigRaw, Configuration)
+makeFinal pr (stringBuilder, cr, c) vp = case vp of
+  PR.StringPart str -> return (stringBuilder ++ str, cr, c)
+  PR.ParameterPart pn -> do
+    (s, newCR, newC) <- evaluateParameterPart pn pr cr c
+    return (stringBuilder ++ s, newCR, newC)
+
+evaluateParameterPart :: PR.ParameterName -> ParseResult -> ConfigRaw -> Configuration -> App s (String, ConfigRaw, Configuration)
+evaluateParameterPart pn pr cr c =
+  let maybeSingleValue = getSingleValue c pn
+      maybeSearchedX = find (\x -> fst x == pn) cr
+   in case maybeSingleValue of
+        Just str -> return (str, cr, c)
+        Nothing -> case maybeSearchedX of
+          Nothing -> lift . throwE $ paramNotFoundErr pn
+          Just (pn', _) -> do
+            (_, newC) <- case PR.getParameter pr pn' of
+              Nothing -> lift . throwE $ "Parameter " ++ pn ++ " not found"
+              Just pa -> buildParameter pr cr c pa
+            case getSingleValue newC pn' of
+              Nothing -> lift . throwE $ "Parameter " ++ pn ++ " cannot be resolved"
+              Just s -> return (s, cr, newC)
+
+buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App s ([String], Configuration)
+buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
+  PR.SingleValue (PR.NeedsInput vps) -> foldM f ([], c) vps
+  _ -> lift . throwE $ "This error should not be happening"
+  where
+    f :: ([String], Configuration) -> ValuePart -> App s ([String], Configuration)
+    f (strs, c') (PR.StringPart s) = case strs of
+      [] -> return ([s], c)
+      _ -> return (map (++ s) strs, c')
+    f (strs, c) (PR.ParameterPart pn) =
+      do
+        (paramValues, newC) <- makeFinalMulti pr cr c pn
+        return ([str ++ param | str <- strs, param <- paramValues], newC)
+
+makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> PR.ParameterName -> App s ([String], Configuration)
+makeFinalMulti pr cr c n = case PR.getParameter pr n of
+  Nothing -> lift . throwE $ "Parameter " ++ n ++ " is used but not defined."
+  Just p -> do
+    (_, cNew) <- buildParameter pr cr c p
+    case C.getSingleValue c n of
+      Just s -> return ([s], cNew)
+      Nothing -> case C.getMultiValue c n of
+        Just ss -> return (ss, cNew)
+        Nothing -> lift . throwE $ "This error should not be happening"
 
 paramNotFoundErr :: String -> String
 paramNotFoundErr pn = "Found usage of parameter " ++ pn ++ ", but it was never defined."
+
+incorrectUsageOfMultiParam :: String
+incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible values or is a multi parameter itself is not allowed"

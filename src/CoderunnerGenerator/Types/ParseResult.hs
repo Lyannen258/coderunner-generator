@@ -4,7 +4,9 @@ module CoderunnerGenerator.Types.ParseResult
     ParameterName,
     Value (Final, NeedsInput),
     ValuePart (StringPart, ParameterPart),
-    ParameterValue,
+    ParameterValue (SingleValue, MultiValue),
+    Parameter (Parameter),
+    getParameter,
     singleValue,
     multiValue,
     singleParam,
@@ -23,6 +25,7 @@ module CoderunnerGenerator.Types.ParseResult
     getAtIndex,
     getAtIndexSingle,
     getAtIndexMulti,
+    containsMultiParamUsage
   )
 where
 
@@ -200,6 +203,31 @@ countValues pr pn = case parameter of
 -- | Get the list of constraints from a 'ParseResult'
 getConstraints :: ParseResult -> [Constraint]
 getConstraints (ParseResult (ParameterComposition _ cs)) = cs
+
+-- | Check if parameter contains a multi parameter usage somewhere in its values
+containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
+containsMultiParamUsage pr n = any f $ getAllValues pr n
+  where
+    f :: Value -> Bool
+    f  (Final _) = False
+    f (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs
+
+valuePartContainsMultiParamUsage :: ParseResult -> ValuePart -> Bool
+valuePartContainsMultiParamUsage _ (StringPart _) = False
+valuePartContainsMultiParamUsage pr (ParameterPart pn) = isMulti pr pn
+
+-- | Get all 'Value's of a parameter, no matter if single or multi
+getAllValues :: ParseResult -> ParameterName -> [Value]
+getAllValues pr pn = case getParameter pr pn of
+  Nothing -> []
+  Just (Parameter _ vs) -> foldl' f [] vs
+  where
+    f :: [Value] -> ParameterValue -> [Value]
+    f vs pv = vs ++ getAllValuesFromParameterValue pv
+
+getAllValuesFromParameterValue :: ParameterValue -> [Value]
+getAllValuesFromParameterValue (SingleValue v) = [v]
+getAllValuesFromParameterValue (MultiValue vs) = toList vs
 
 -- | Get the first tuple of a constraint
 first :: Constraint -> (ParameterName, Int)
