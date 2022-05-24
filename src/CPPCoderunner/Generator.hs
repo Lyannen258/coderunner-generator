@@ -135,7 +135,7 @@ buildOutput _ task solution preAllocation tests t =
                 (unqual "question")
                 [ node
                     (unqual "name")
-                    ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing) -- TODO Set name once it is available
+                    ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing)
                     ),
                   node
                     (unqual "questiontext")
