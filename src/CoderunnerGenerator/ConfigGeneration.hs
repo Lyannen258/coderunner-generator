@@ -1,6 +1,6 @@
 module CoderunnerGenerator.ConfigGeneration (computeConfigurations) where
 
-import CoderunnerGenerator.Helper (maybeToEither, removeFirst, singleton)
+import CoderunnerGenerator.Helper (maybeToEither, singleton)
 import CoderunnerGenerator.Types.App
 import CoderunnerGenerator.Types.Configuration as C
 import CoderunnerGenerator.Types.Globals (getAmount)
@@ -12,11 +12,8 @@ import Control.Monad.Trans.Except (except, throwE)
 import Control.Monad.Trans.Reader (asks)
 import Data.Either (lefts, rights)
 import Data.Foldable (Foldable (toList), find, foldl')
-import Data.List (delete, nub)
+import Data.List (nub)
 import Data.Maybe (fromMaybe)
-import qualified Data.Sequence as Seq
-import Debug.Pretty.Simple
-import Lens.Micro.Extras (view)
 import System.Random (RandomGen, getStdGen, uniformR)
 
 type ConfigListRaw = [[(ParameterName, Int)]]
@@ -25,8 +22,8 @@ type ConfigRaw = [(ParameterName, Int)]
 
 computeConfigurations :: ParseResult -> App s [Configuration]
 computeConfigurations pr = do
-  let all = allCombinations pr
-  let withoutForbidden = removeForbidden pr all
+  let combs = allCombinations pr
+  let withoutForbidden = removeForbidden pr combs
   amountMaybe <- asks getAmount
   let amount = fromMaybe 0 amountMaybe
   randomNumbers <- getRandomNumbers amount (length withoutForbidden)
@@ -39,10 +36,10 @@ allCombinations pr =
       parameterNames = PR.getParameterNames pr
 
       parameterValueTuples :: ConfigListRaw
-      parameterValueTuples = map f parameterNames
+      parameterValueTuples = map f' parameterNames
         where
-          f :: ParameterName -> ConfigRaw
-          f pn = zip (repeat pn) [0 .. PR.countValues pr pn - 1]
+          f' :: ParameterName -> ConfigRaw
+          f' pn = zip (repeat pn) [0 .. PR.countValues pr pn - 1]
 
       f :: ConfigListRaw -> ConfigRaw -> ConfigListRaw
       f [] parameterValueTuple = map singleton parameterValueTuple
@@ -119,21 +116,21 @@ addToConfiguration c n i singleMultiE
     rs = rights singleMultiE
 
 checkMultiParamUsageReqs :: ParseResult -> PR.Parameter -> Bool
-checkMultiParamUsageReqs pr p@(PR.Parameter n vs) =
+checkMultiParamUsageReqs pr (PR.Parameter n vs) =
   isSingle pr n && length vs == 1
 
 buildParameterValue :: ParseResult -> ([Either String [String]], ConfigRaw, Configuration) -> PR.ParameterValue -> App s ([Either String [String]], ConfigRaw, Configuration)
 buildParameterValue pr (l, cr, c) pv = case pv of
   PR.SingleValue va -> do
-    (v, newCR, newC) <- buildValue pr ("", cr, c) va
-    return (l ++ [Left v], newCR, newC)
+    (v, cr', c') <- buildValue pr ("", cr, c) va
+    return (l ++ [Left v], cr', c')
   PR.MultiValue vs -> do
     (ss, newCR, newC) <- foldM f ([], cr, c) vs
     return (l ++ [Right ss], newCR, newC)
     where
       f :: ([String], ConfigRaw, Configuration) -> PR.Value -> App s ([String], ConfigRaw, Configuration)
-      f (ss, cr, c) v = do
-        (nextS, newCR, newC) <- buildValue pr ("", cr, c) v
+      f (ss, cr'', c'') v = do
+        (nextS, newCR, newC) <- buildValue pr ("", cr'', c'') v
         return (ss ++ [nextS], newCR, newC)
 
 buildValue :: ParseResult -> (String, ConfigRaw, Configuration) -> PR.Value -> App s (String, ConfigRaw, Configuration)
@@ -175,9 +172,9 @@ buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
     f (strs, c') (PR.StringPart s) = case strs of
       [] -> return ([s], c)
       _ -> return (map (++ s) strs, c')
-    f (strs, c) (PR.ParameterPart pn) =
+    f (strs, c') (PR.ParameterPart pn) =
       do
-        (paramValues, newC) <- makeFinalMulti pr cr c pn
+        (paramValues, newC) <- makeFinalMulti pr cr c' pn
         return ([str ++ param | str <- strs, param <- paramValues], newC)
 
 makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> PR.ParameterName -> App s ([String], Configuration)

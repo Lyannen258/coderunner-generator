@@ -25,16 +25,15 @@ module CoderunnerGenerator.Types.ParseResult
     getAtIndex,
     getAtIndexSingle,
     getAtIndexMulti,
-    containsMultiParamUsage
+    containsMultiParamUsage,
   )
 where
 
 import CoderunnerGenerator.Helper (maybeToEither)
-import Data.Foldable (Foldable (toList), elem, find, foldl')
+import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (nub)
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
-import Debug.Pretty.Simple (pTraceShowId)
 
 -- | Main data type. Used to pass information from a specialized generator to the main generator.
 newtype ParseResult = ParseResult ParameterComposition -- maybe add Enumeration in future
@@ -104,7 +103,7 @@ multiValue = MultiValue . Seq.fromList
 -- | Add values for a parameter to a 'ParseResult'. Duplicate values
 -- will not be added, if there are already values for the parameter.
 addParameter :: ParseResult -> Parameter -> Either String ParseResult
-addParameter pr@(ParseResult pc@(ParameterComposition ps cs)) p@(Parameter pn pvs) =
+addParameter pr@(ParseResult pc@(ParameterComposition ps _)) p@(Parameter pn pvs) =
   case getParameter pr pn of
     Nothing -> return $ ParseResult $ pc {parameters = ps ++ [p]}
     Just (Parameter _ pvs2) -> do
@@ -112,8 +111,8 @@ addParameter pr@(ParseResult pc@(ParameterComposition ps cs)) p@(Parameter pn pv
       return $ ParseResult $ pc {parameters = foldl' (replace $ Parameter pn mergedValues) [] ps}
   where
     replace :: Parameter -> [Parameter] -> Parameter -> [Parameter]
-    replace p1@(Parameter pn _) acc p2@(Parameter pn' _)
-      | pn' == pn = acc ++ [p1]
+    replace p1@(Parameter n _) acc p2@(Parameter n' _)
+      | n' == n = acc ++ [p1]
       | otherwise = acc ++ [p2]
 
 -- | Merge two 'ParameterValues'. Removes duplicates.
@@ -141,16 +140,16 @@ addConstraint pr@(ParseResult pc) v1 v2 =
 
 findValueIndex :: ParseResult -> ParameterName -> ParameterValue -> Maybe Int
 findValueIndex pr pn v = case getParameterValues pr pn of
-  Left s -> Nothing
+  Left _ -> Nothing
   Right vs -> Seq.elemIndexL v vs
 
 getAtIndex :: ParseResult -> ParameterName -> Int -> Either String ParameterValue
 getAtIndex pr pn i = case getParameterValues pr pn of
   Left s -> Left s
-  Right vs -> getE vs i
+  Right vs -> getE vs
   where
-    getE :: Seq a -> Int -> Either String a
-    getE seq i = case Seq.lookup i seq of
+    getE :: Seq a -> Either String a
+    getE s = case Seq.lookup i s of
       Nothing -> Left "Index out of bounds"
       Just a -> Right a
 
@@ -158,13 +157,13 @@ getAtIndexSingle :: ParseResult -> ParameterName -> Int -> Either String Value
 getAtIndexSingle pr pn i = case getAtIndex pr pn i of
   Left s -> Left s
   Right (SingleValue v) -> return v
-  Right (MultiValue v) -> Left $ pn ++ " is not a single parameter."
+  Right (MultiValue _) -> Left $ pn ++ " is not a single parameter."
 
 getAtIndexMulti :: ParseResult -> ParameterName -> Int -> Either String (Seq Value)
 getAtIndexMulti pr pn i = case getAtIndex pr pn i of
   Left s -> Left s
   Right (MultiValue v) -> return v
-  Right (SingleValue v) -> Left $ pn ++ " is not a multi parameter."
+  Right (SingleValue _) -> Left $ pn ++ " is not a multi parameter."
 
 -- | Get all values for a specific parameter.
 getParameterValues :: ParseResult -> ParameterName -> Either String (Seq ParameterValue)
@@ -209,7 +208,7 @@ containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
 containsMultiParamUsage pr n = any f $ getAllValues pr n
   where
     f :: Value -> Bool
-    f  (Final _) = False
+    f (Final _) = False
     f (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs
 
 valuePartContainsMultiParamUsage :: ParseResult -> ValuePart -> Bool
@@ -245,7 +244,7 @@ empty = ParseResult $ ParameterComposition [] []
 isSingle :: ParseResult -> ParameterName -> Bool
 isSingle pr pn = case param of
   Just (Parameter _ vs) -> case Seq.lookup 0 vs of
-    Just (SingleValue v) -> True
+    Just (SingleValue _) -> True
     _ -> False
   _ -> False
   where
@@ -255,7 +254,7 @@ isSingle pr pn = case param of
 isMulti :: ParseResult -> ParameterName -> Bool
 isMulti pr pn = case param of
   Just (Parameter _ vs) -> case Seq.lookup 0 vs of
-    Just (MultiValue v) -> True
+    Just (MultiValue _) -> True
     _ -> False
   _ -> False
   where

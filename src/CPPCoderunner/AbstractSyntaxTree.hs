@@ -13,7 +13,6 @@
 -- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
 module CPPCoderunner.AbstractSyntaxTree where
 
-import Lens.Micro.Extras (view)
 import Lens.Micro.TH
 
 -- * Pos type class and type

@@ -1,14 +1,13 @@
 module CoderunnerGenerator.Interface (run) where
 
 import qualified CoderunnerGenerator.CmdArgs as CmdArgs
-import CoderunnerGenerator.Main ( main )
+import CoderunnerGenerator.Main (main)
 import CoderunnerGenerator.Types.Configuration (Configuration)
-import CoderunnerGenerator.Types.Globals ( constructGlobals )
+import CoderunnerGenerator.Types.Globals (constructGlobals)
 import CoderunnerGenerator.Types.ParseResult (ParseResult)
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
-import Text.Pretty.Simple (pPrint)
 
 run :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> Either String [String]) -> IO ()
 run parser generator = handleErrors $ do

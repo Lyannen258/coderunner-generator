@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module CoderunnerGenerator.Types.Configuration
   ( Configuration,
@@ -73,19 +74,19 @@ getSingleValue c pn = do
   param <- getParameter c pn
   case param of
     Single sp -> return $ sp ^. selectedValue
-    Multi mp -> Nothing
+    Multi _ -> Nothing
 
 getMultiValue :: Configuration -> ParameterName -> Maybe [String]
 getMultiValue c pn = do
   param <- getParameter c pn
   case param of
-    Single sp -> Nothing
+    Single _ -> Nothing
     Multi mp -> return $ mp ^. selectedValueRange
 
 contains :: Configuration -> ParameterName -> Bool
 contains c pn = case getParameter c pn of
   Nothing -> False
-  Just pa -> True
+  Just _ -> True
 
 getParameter :: Configuration -> ParameterName -> Maybe Parameter
 getParameter c pn = find f (parameters c)
@@ -97,9 +98,9 @@ getParameter c pn = find f (parameters c)
 evaluateMethod :: Configuration -> ParameterName -> String -> [String] -> Either String [String] -- String is function name, First [String] is arguments, returned [String] is result
 evaluateMethod conf pn "all" _ = getAllValues conf pn
 evaluateMethod conf pn fn@"random" [arg] = do
-  all <- getAllValues conf pn
+  allVs <- getAllValues conf pn
   amount <- maybeToEither (readMaybe arg) (argumentMustBeTypeErr fn "1" "int")
-  return $ take amount all
+  return $ take amount allVs
 -- TODO add actual randomness
 evaluateMethod _ _ fnName args = Left $ noMatchingMethodErr fnName args
 

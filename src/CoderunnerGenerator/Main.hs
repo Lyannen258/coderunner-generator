@@ -1,27 +1,17 @@
 module CoderunnerGenerator.Main where
 
-import CoderunnerGenerator.CmdArgs (Args)
-import qualified CoderunnerGenerator.CmdArgs as CmdArgs
 import CoderunnerGenerator.ConfigGeneration (computeConfigurations)
-import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Types.App (App)
 import CoderunnerGenerator.Types.Globals
-import Control.Exception (SomeException, try)
-import Control.Monad (foldM_, sequence, when)
+import Control.Monad (foldM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (except, runExceptT)
-import Control.Monad.Trans.Reader (ReaderT, asks)
-import Data.Map (Map)
-import Data.Text.Lazy (unpack)
-import Data.Tree (drawTree)
-import Data.Void (Void)
-import System.Directory
-import System.Environment (getArgs)
-import System.FilePath (dropExtension, takeBaseName, takeDirectory, takeExtension, (</>))
+import Control.Monad.Trans.Except (except)
+import Control.Monad.Trans.Reader (asks)
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (dropExtension, takeBaseName, takeDirectory, (</>))
 import System.IO
-import Text.Megaparsec (ParseErrorBundle, errorBundlePretty, parse)
-import Text.Pretty.Simple (pPrint, pShowNoColor)
+import Text.Pretty.Simple (pPrint)
 
 main :: App s ()
 main = do
@@ -37,7 +27,8 @@ main = do
 
   generator <- asks getGenerator
   results <- lift . except $ generator configs s
-  foldM_ (\acc s -> writeToFile ("result" ++ show acc ++ ".xml") s >> return (acc + 1)) 1 results -- TODO put in separate function
+  writeResults results
+
   liftIO $ putStrLn $ "Generated " ++ (show . length) results ++ " instances"
 
 -- | Read content of the template file
@@ -47,6 +38,13 @@ readTemplateFile = do
   inputHandle <- liftIO $ openFile filePath ReadMode
   liftIO $ hSetEncoding inputHandle utf8
   liftIO $ hGetContents inputHandle
+
+-- | Write results to the output files
+writeResults :: [String] -> App s ()
+writeResults = foldM_ f 1
+  where
+    f :: Int -> String -> App s Int
+    f acc s = writeToFile ("result" ++ show acc ++ ".xml") s >> return (acc + 1)
 
 -- | Create directory for the output files
 createOutputDirectory :: App s ()
@@ -68,81 +66,3 @@ debugOutput :: Show a => a -> App s ()
 debugOutput a = do
   dbg <- asks getDebugOutputFlag
   liftIO $ when dbg (pPrint a)
-
-{-
-
--- | Get the value result by asking the user for values or automatically generating configurations.
-getValueTables :: Maybe Int -> (ST.SymbolTable, CG.ConstraintGraph) -> IO (Either String [Map String [String]])
-getValueTables (Just a) sr = Right <$> generateConfigs a sr
-getValueTables Nothing sr = do
-  ioEitherInteractionRes <- runExceptT $ questionUser sr
-  case ioEitherInteractionRes of
-    Left s -> return $ Left s
-    Right ir ->
-      case ir of
-        ValueResult m -> return $ Right [m]
-        AmountResult n -> Right <$> generateConfigs n sr
-
--- | Generate the coderunner exercises. Uses all intermediate results
--- (Parser, SemanticAnalyzer, Interaction/ValueTable)
-getFinalResult ::
-  Either (ParseErrorBundle String Void) AST.Template ->
-  Either String (ST.SymbolTable, b) ->
-  Either String [ValueTable] ->
-  String ->
-  Either String [String]
-getFinalResult parseResult semanticResult valueResult name = do
-  ast <- parseToSemantic parseResult
-  st <- semanticResult
-  vt <- valueResult
-  sequence $ generateOutputs ast (fst st) name vt
-
--- * Parse Functions
-
-writeParseResult :: String -> Either (ParseErrorBundle String Void) AST.Template -> IO ()
-writeParseResult filePath parseResult = do
-  writeToFile
-    filePath
-    "/AST.txt"
-    (parseResultToString parseResult)
-
-parseString :: String -> Either (ParseErrorBundle String Void) AST.Template
-parseString = parse coderunnerParser ""
-
-parseResultToString :: Either (ParseErrorBundle String Void) AST.Template -> String
-parseResultToString parseResult = case parseResult of
-  Left a -> errorBundlePretty a
-  Right b -> unpack $ pShowNoColor b
-
--- * Semantic Analysis Functions
-
-writeSemanticResult :: String -> Either String (ST.SymbolTable, CG.ConstraintGraph) -> IO ()
-writeSemanticResult filePath result = do
-  let output = case result of
-        Right (st, cg) -> (unpack (pShowNoColor st), unpack (pShowNoColor cg) ++ "\n\n" ++ unpack (pShowNoColor (CG.configs cg)))
-        Left err -> (err, err)
-  writeToFile filePath "/ST.txt" (fst output)
-  writeToFile filePath "/CG.txt" (snd output)
-
--- * Final result
-
-writeFinalResult :: String -> Either String [String] -> IO ()
-writeFinalResult filePath (Right results) = foldM_ writeSingleResult 1 (reverse results) -- reverse because foldM_ works in the wrong direction
-  where
-    writeSingleResult counter result = do
-      writeToFile
-        filePath
-        ("/Res_" ++ show counter ++ ".xml")
-        result
-      return (counter + 1)
-writeFinalResult filePath (Left error) = writeToFile filePath "/Res.xml" error
-
--- * Helper
-
-parseToSemantic :: Either (ParseErrorBundle String Void) a -> Either String a
-parseToSemantic (Left error) = Left "Error while Parsing"
-parseToSemantic (Right a) = Right a
-
--- * Error handling
-
- -}

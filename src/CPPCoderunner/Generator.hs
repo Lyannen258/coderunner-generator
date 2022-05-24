@@ -1,23 +1,12 @@
-module CPPCoderunner.Generator where
+module CPPCoderunner.Generator (generate) where
 
 import CPPCoderunner.AbstractSyntaxTree
 import CoderunnerGenerator.Helper
 import CoderunnerGenerator.Types.Configuration
 import Control.Monad (foldM)
 import Data.List (foldl', intercalate, nub)
-import qualified Data.Map as M
-import Data.Maybe (isNothing)
-import Data.Text.Lazy (unpack)
-import Debug.Pretty.Simple (pTraceShowId)
 import Lens.Micro ((^.))
-import Lens.Micro.Extras
-import System.FilePath (takeBaseName, takeDirectory)
-import Text.Pretty.Simple (pShow, pShowNoColor)
-import Text.Read
 import Text.XML.Light
-
-functionCallInParameterErr :: String
-functionCallInParameterErr = "Function call in a parameter is not allowed"
 
 valueNotFoundErr :: String -> String
 valueNotFoundErr p = "No value found for usage of parameter '" ++ p ++ "'"
@@ -33,11 +22,11 @@ generate configs tem = mapM f configs
 
 generateConfiguration :: Configuration -> Template -> Either String String
 generateConfiguration conf tmpl = do
-  taskSection <- generateTaskSection conf tmpl
-  solutionSection <- generateSolutionSection conf tmpl
-  preAllocationSection <- generatePreAllocationSection conf tmpl
-  testSection <- generateTestSection conf tmpl
-  buildOutput conf taskSection solutionSection preAllocationSection testSection tmpl
+  ts <- generateTaskSection conf tmpl
+  ss <- generateSolutionSection conf tmpl
+  pas <- generatePreAllocationSection conf tmpl
+  testS <- generateTestSection conf tmpl
+  buildOutput conf ts ss pas testS tmpl
 
 generateTaskSection :: Configuration -> Template -> Either String String
 generateTaskSection conf tmpl =
@@ -61,16 +50,16 @@ generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCas
               findMultiParams conf (tc ^. code)
                 ++ findMultiParams conf (tc ^. outcome)
 
-          getParamValueTuples :: Configuration -> String -> Either String [(String, String)]
-          getParamValueTuples conf parameterName = do
+          getParamValueTuples :: String -> Either String [(String, String)]
+          getParamValueTuples parameterName = do
             multiParamValues <- maybeToEither (getMultiValue conf parameterName) shouldNotHappenErr
             return [(parameterName, v) | v <- multiParamValues]
        in do
-            paramValueTuples <- mapM (getParamValueTuples conf) multiParams
+            paramValueTuples <- mapM getParamValueTuples multiParams
             let allCombos = combinations paramValueTuples
-            code <- generateMultiSection conf allCombos (tc ^. code)
-            outcome <- generateMultiSection conf allCombos (tc ^. outcome)
-            return $ zip code outcome
+            c <- generateMultiSection conf allCombos (tc ^. code)
+            o <- generateMultiSection conf allCombos (tc ^. outcome)
+            return $ zip c o
 
 -- | Computes all combinations of elements of an arbitrary amount of lists
 --
@@ -93,27 +82,27 @@ findMultiParams conf = foldr f []
     f _ acc = acc
 
 generateMultiSection :: Configuration -> [[(String, String)]] -> [SectionBodyComponent] -> Either String [String]
-generateMultiSection config combinations sbcs 
-  | (not . null) combinations = mapM f combinations
+generateMultiSection config combs sbcs
+  | (not . null) combs = mapM f combs
   | otherwise = singleton <$> f []
   where
     f :: [(String, String)] -> Either String String
-    f combination = foldM (buildSBC combination) "" sbcs
+    f comb = foldM (buildSBC comb) "" sbcs
 
     buildSBC :: [(String, String)] -> String -> SectionBodyComponent -> Either String String
-    buildSBC comb acc (TextComponent s) = return (acc ++ s)
-    buildSBC comb acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ id (Just cp)))) =
+    buildSBC _ acc (TextComponent s) = return (acc ++ s)
+    buildSBC _ acc (OutputComponent (TextConstant s)) = return (acc ++ s)
+    buildSBC _ acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        values <- evaluateMethod config id (cp ^. identifier) (cp ^. arguments)
-        return $ acc ++ intercalate "\n" values
-    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ id Nothing))) =
+        vs <- evaluateMethod config name (cp ^. identifier) (cp ^. arguments)
+        return $ acc ++ intercalate "\n" vs
+    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue config id of
+        value <- case getSingleValue config name of
           Just s -> return s
-          Nothing -> case lookup id comb of
+          Nothing -> case lookup name comb of
             Just ss -> return ss
-            Nothing -> Left $ valueNotFoundErr id
+            Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 
 generateSection :: Configuration -> [SectionBodyComponent] -> Either String String
@@ -122,21 +111,21 @@ generateSection conf = foldM f ""
     f :: String -> SectionBodyComponent -> Either String String
     f acc (TextComponent s) = return (acc ++ s)
     f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    f acc (OutputComponent (Parameter (ParameterUsage _ id (Just cp)))) =
+    f acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        values <- evaluateMethod conf id (cp ^. identifier) (cp ^. arguments)
-        return $ acc ++ intercalate "\n" values
-    f acc (OutputComponent (Parameter (ParameterUsage _ id Nothing))) =
+        vs <- evaluateMethod conf name (cp ^. identifier) (cp ^. arguments)
+        return $ acc ++ intercalate "\n" vs
+    f acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue conf id of
+        value <- case getSingleValue conf name of
           Just s -> return s
-          Nothing -> case getMultiValue conf id of
+          Nothing -> case getMultiValue conf name of
             Just ss -> return $ intercalate "\n" ss
-            Nothing -> Left $ valueNotFoundErr id
+            Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 
 buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Template -> Either String String
-buildOutput conf task solution preAllocation tests t =
+buildOutput _ task solution preAllocation tests t =
   let xmlDoc :: Element
       xmlDoc =
         node (unqual "quiz") $
@@ -186,15 +175,15 @@ testNodes :: [(String, String)] -> [Element]
 testNodes = map f
   where
     f :: (String, String) -> Element
-    f (code, outcome) =
+    f (c, o) =
       node
         (unqual "testcase")
         [ node
             (unqual "testcode")
-            (node (unqual "text") (CData CDataVerbatim code Nothing)),
+            (node (unqual "text") (CData CDataVerbatim c Nothing)),
           node
             (unqual "expected")
-            (node (unqual "text") (CData CDataVerbatim outcome Nothing))
+            (node (unqual "text") (CData CDataVerbatim o Nothing))
         ]
 
 moodleTemplate :: String -> Element
@@ -230,75 +219,3 @@ moodleTemplate solution =
             "    return 0;",
             "}"
           ]
-
---createSolutionTemplate :: String -> String -> String
---createSolutionTemplate haystack needle = strReplace needle "solution" haystack
--- Perhapts using Regex-> Text.Regex subRegex sieht da ganz gut aus.
-
-{-
-
-generateBody :: Mixed -> SymbolTable -> ValueTable -> Either String String
-generateBody m st vt = do
-  foldM folder "" m
-  where
-    folder :: String -> MixedPart -> Either String String
-    folder str (ConstantPart c) = do return $ str ++ c
-    folder str (ParameterPart pu) = do
-      let maybepp = view propertyPart pu
-      let id = view identifier pu
-      code <-
-        ( case maybepp of
-            Nothing -> getSingleValue id vt
-            Just pp -> evaluateWithPropertyPart id pp st vt
-          )
-      return $ str ++ code
-
-evaluateWithPropertyPart ::
-  Identifier ->
-  PropertyPart ->
-  SymbolTable ->
-  ValueTable ->
-  Either String String
-evaluateWithPropertyPart id pp st vt = do
-  symbolInfo <- maybeToEither (M.lookup id st) ("No symbol found for identifier: '" ++ id ++ "'")
-  case symbolInfo of
-    BlueprintUsageSymbol b -> evaluateBlueprintProp id b pp
-    EnumerationSymbol e -> evaluateFunctionCall id e pp
-    _ -> Left "Using a parameter property or calling a function on the parameter is only possible with a blueprint usage parameter or an enumeration with multiple parameters respectively"
-
-evaluateBlueprintProp :: Identifier -> ST.BlueprintUsage -> PropertyPart -> Either String String
-evaluateBlueprintProp id bp pp =
-  let prop = view property pp
-      maybeFuncPart = view arguments pp
-      noFuncPart = isNothing maybeFuncPart
-      propValues = propertyValues bp
-   in if noFuncPart
-        then maybeToEither (M.lookup prop propValues) ("Symbol '" ++ id ++ "' has no property '" ++ prop ++ "'")
-        else Left "It is not possible to use a function call with a blueprint usage parameter"
-
-evaluateFunctionCall :: Identifier -> ST.Enumeration -> PropertyPart -> Either String String
-evaluateFunctionCall id e pp =
-  let prop = view property pp
-      maybeFuncPart = view arguments pp
-   in do
-        funcPart <- maybeToEither maybeFuncPart ("Enumeration parameter " ++ id ++ " has no property " ++ prop ++ ". Maybe you forgot to add arguments to the function call.")
-        case prop of
-          "ALL" -> evaluateAllFunction e
-          "CHOOSE_AT_RANDOM" -> evaluateRandomFunction id funcPart e
-          _ -> Left "Not a valid function call"
-
-evaluateAllFunction :: ST.Enumeration -> Either String String
-evaluateAllFunction e =
-  let valueStrings = map enumValue e
-   in Right $ intercalate "\n" valueStrings
-
-evaluateRandomFunction :: Identifier -> FunctionCallPart -> ST.Enumeration -> Either String String
-evaluateRandomFunction id fcp e =
-  let firstArg = head fcp
-      valueStrings = map enumValue e
-   in case readMaybe firstArg of
-        Just i ->
-          if i <= length e
-            then Right $ intercalate "\n" $ take i valueStrings
-            else Left "More random values requested than there are in the list"
-        Nothing -> Left "CHOOSE_AT_RANDOM was called with a non-integer argument" -}

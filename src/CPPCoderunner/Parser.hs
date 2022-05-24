@@ -1,53 +1,15 @@
 module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 
 import CPPCoderunner.AbstractSyntaxTree
-import qualified CPPCoderunner.AbstractSyntaxTree as PR
-import CoderunnerGenerator.Helper (maybeToEither)
 import CoderunnerGenerator.Types.ParseResult (ParseResult)
 import qualified CoderunnerGenerator.Types.ParseResult as PR
 import Control.Monad (foldM)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader
 import Data.Foldable (foldl')
-import Data.Maybe (fromMaybe)
 import Data.Void (Void)
-import Debug.Pretty.Simple (pTraceShowId)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import Text.Megaparsec.Debug
-
--- * Error Messages
-
-valueMissing :: String -> String -> String -> String -> String
-valueMissing firstId firstValue secondId secondValue =
-  "Tried to add constraint to ParseResult but could not find one of the parameter values. "
-    ++ "First Value: "
-    ++ firstId
-    ++ "->"
-    ++ firstValue
-    ++ "\n"
-    ++ "Second Value: "
-    ++ secondId
-    ++ "->"
-    ++ secondValue
-
-valueAmountMismatch :: String -> String -> Int -> Int -> String
-valueAmountMismatch fstId sndId fstAmount sndAmount =
-  "Tried to add constraints between values of "
-    ++ fstId
-    ++ " and "
-    ++ sndId
-    ++ ", but amount of values does not match. "
-    ++ fstId
-    ++ " has "
-    ++ show fstAmount
-    ++ " and "
-    ++ sndId
-    ++ " has "
-    ++ show sndAmount
-    ++ "."
 
 -- * Interface
 
@@ -74,13 +36,9 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
               then PR.NeedsInput (map toPRValuePart pvps)
               else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
 
-          isIDUsage :: ParameterValuePart -> Bool
-          isIDUsage (IdUsage _) = True
-          isIDUsage _ = False
-
           toPRValuePart :: ParameterValuePart -> PR.ValuePart
           toPRValuePart (Simple s) = PR.StringPart s
-          toPRValuePart (IdUsage id) = PR.ParameterPart id
+          toPRValuePart (IdUsage n) = PR.ParameterPart n
        in case psMain of
             SingleParameterPart mainId mainPVS ->
               case psReq of
@@ -92,9 +50,9 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
                       pr'' <- PR.addParameter pr' $ PR.singleParam reqId (map toPRValue reqPVS)
                       let valuePairs = zip mainPVS reqPVS
                       foldM
-                        ( \pr (m, r) ->
+                        ( \prl (m, r) ->
                             PR.addConstraint
-                              pr
+                              prl
                               (mainId, (PR.singleValue . toPRValue) m)
                               (reqId, (PR.singleValue . toPRValue) r)
                         )
@@ -127,9 +85,9 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
                       pr'' <- PR.addParameter pr' $ PR.singleParam reqId (map toPRValue reqPVS)
                       let valuePairs = zip mainPVSS reqPVS
                       foldM
-                        ( \pr (m, r) ->
+                        ( \prl (m, r) ->
                             PR.addConstraint
-                              pr
+                              prl
                               (mainId, (PR.multiValue . map toPRValue) m)
                               (reqId, (PR.singleValue . toPRValue) r)
                         )
@@ -143,9 +101,9 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
                       pr'' <- PR.addParameter pr' $ PR.multiParam reqId (map (map toPRValue) reqPVSS)
                       let pairs = zip mainPVSS reqPVSS
                       foldM
-                        ( \pr (m, r) ->
+                        ( \prl (m, r) ->
                             PR.addConstraint
-                              pr
+                              prl
                               (mainId, (PR.multiValue . map toPRValue) m)
                               (reqId, (PR.multiValue . map toPRValue) r)
                         )
@@ -241,16 +199,16 @@ parameterStatementParser = do
 
 parameterPartParser :: Parser ParameterPart
 parameterPartParser = do
-  identifier <- identifierParser
-  openParenth
-  parameterPart <- valueListParser identifier
-  closingParenth
+  i <- identifierParser
+  _ <- openParenth
+  parameterPart <- valueListParser i
+  _ <- closingParenth
   return parameterPart
 
 valueListParser :: String -> Parser ParameterPart
-valueListParser id =
-  (MultiParameterPart id <$> multiValueListParser)
-    <|> (SingleParameterPart id <$> singleValueListParser)
+valueListParser i =
+  (MultiParameterPart i <$> multiValueListParser)
+    <|> (SingleParameterPart i <$> singleValueListParser)
 
 singleValueListParser :: Parser [ParameterValue]
 singleValueListParser = sepBy valueParser comma
@@ -264,9 +222,9 @@ valueRangeParser =
 
 valueParser :: Parser ParameterValue
 valueParser = do
-  openQuotes
+  _ <- openQuotes
   valueParts <- some valuePartParser
-  closingQuotes
+  _ <- closingQuotes
   return $ ParameterValue valueParts
 
 valuePartParser :: Parser ParameterValuePart
@@ -282,43 +240,40 @@ simpleValuePartParser = do
 
 stringEndLookAhead :: Parser ()
 stringEndLookAhead = do
-  x <- (try . lookAhead) (fmap (: []) closingQuotes <|> openOutput)
+  _ <- (try . lookAhead) (fmap (: []) closingQuotes <|> openOutput)
   return ()
 
 idUsageValuePartParser :: Parser ParameterValuePart
 idUsageValuePartParser = do
-  openOutput
-  identifier <- identifierParser
-  closingOutput
-  return $ IdUsage identifier
+  _ <- openOutput
+  i <- identifierParser
+  _ <- closingOutput
+  return $ IdUsage i
 
 -- * Other Sections
 
 sectionParser :: String -> Parser Section
-sectionParser headline = do
+sectionParser h = do
   Section placeholder
-    <$> headlineParser headline
+    <$> headlineParser h
     <*> some (sectionBodyComponentParser $ headlineOneOfParser headlines)
 
 headlineParser :: String -> Parser String
-headlineParser headline =
-  let headlineWithColon = headline ++ ":"
-      headlineParser :: Parser String
-      headlineParser = (try . hlexeme . string) headlineWithColon
+headlineParser h =
+  let headlineWithColon = h ++ ":"
+
+      headlineParser' :: Parser String
+      headlineParser' = (try . hlexeme . string) headlineWithColon
    in do
-        headline <- headlineParser
-        eol
-        return $ init headline -- Do not take the colon
+        _ <- headlineParser'
+        _ <- eol
+        return h -- Do not take the colon
 
 headlineOneOfParser :: [String] -> Parser String
-headlineOneOfParser headlines =
+headlineOneOfParser hs =
   let hParsers :: [Parser String]
-      hParsers = map headlineParser headlines
+      hParsers = map headlineParser hs
    in choice hParsers
-
-sectionBodyParser :: Parser a -> Parser [SectionBodyComponent]
-sectionBodyParser textEnd =
-  some $ sectionBodyComponentParser textEnd
 
 sectionBodyComponentParser :: Parser a -> Parser SectionBodyComponent
 sectionBodyComponentParser textEnd =
@@ -334,7 +289,7 @@ textComponentChar :: Parser a -> Parser String
 textComponentChar textEnd = do
   notFollowedBy (textComponentEndParser textEnd)
   c <- ((: []) <$> printChar) <|> eol
-  optional blockComment
+  _ <- optional blockComment
   return c
 
 textComponentEndParser :: Parser a -> Parser ()
@@ -347,17 +302,17 @@ outputComponentParser =
 
 testSectionParser :: Parser TestSection
 testSectionParser = do
-  headlineParser test
+  _ <- headlineParser test
   testcases <- some testCaseParser
   return $ TestSection placeholder testcases
 
 testCaseParser :: Parser TestCase
 testCaseParser = do
-  codeHeadlineParser
-  code <- some $ sectionBodyComponentParser outcomeHeadlineParser
-  outcomeHeadlineParser
-  outcome <- some $ sectionBodyComponentParser $ outcomeHeadlineParser <|> headlineOneOfParser headlines
-  return $ TestCase placeholder code outcome
+  _ <- codeHeadlineParser
+  c <- some $ sectionBodyComponentParser outcomeHeadlineParser
+  _ <- outcomeHeadlineParser
+  o <- some $ sectionBodyComponentParser $ codeHeadlineParser <|> headlineOneOfParser headlines
+  return $ TestCase placeholder c o
 
 codeHeadlineParser :: Parser String
 codeHeadlineParser = headlineParser "Code"
@@ -379,17 +334,17 @@ stringOutputParser =
 
 parameterUsageParser :: Parser Output
 parameterUsageParser = do
-  id <- identifierParser
-  callPart <- (optional . try) callPartParser
-  return $ Parameter $ ParameterUsage placeholder id callPart
+  i <- identifierParser
+  cp <- (optional . try) callPartParser
+  return $ Parameter $ ParameterUsage placeholder i cp
 
 callPartParser :: Parser CallPart
 callPartParser = do
-  point
+  _ <- point
   callIdentifier <- identifierParser
-  openParenth
+  _ <- openParenth
   args <- argsParser
-  closingParenth
+  _ <- closingParenth
   return $ CallPart callIdentifier args
 
 argsParser :: Parser [String]

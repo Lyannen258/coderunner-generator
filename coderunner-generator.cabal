@@ -23,7 +23,6 @@ maintainer:         eriksson@wifa.uni-leipzig.de
 
 library
   exposed-modules:
-      CoderunnerGenerator.SemanticAnalyzer,
       CoderunnerGenerator.Helper,
       CoderunnerGenerator.Types.Globals,
       CoderunnerGenerator.Types.Configuration,
