@@ -37,7 +37,7 @@ generateConfiguration conf tmpl = do
   solutionSection <- generateSolutionSection conf tmpl
   preAllocationSection <- generatePreAllocationSection conf tmpl
   testSection <- generateTestSection conf tmpl
-  buildOutput conf taskSection solutionSection preAllocationSection testSection
+  buildOutput conf taskSection solutionSection preAllocationSection testSection tmpl
 
 generateTaskSection :: Configuration -> Template -> Either String String
 generateTaskSection conf tmpl =
@@ -135,8 +135,8 @@ generateSection conf = foldM f ""
             Nothing -> Left $ valueNotFoundErr id
         return $ acc ++ value
 
-buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Either String String
-buildOutput conf task solution preAllocation tests =
+buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Template -> Either String String
+buildOutput conf task solution preAllocation tests t =
   let xmlDoc :: Element
       xmlDoc =
         node (unqual "quiz") $
@@ -146,7 +146,7 @@ buildOutput conf task solution preAllocation tests =
                 (unqual "question")
                 [ node
                     (unqual "name")
-                    ( node (unqual "text") (CData CDataText "" Nothing) -- TODO Set name once it is available
+                    ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing) -- TODO Set name once it is available
                     ),
                   node
                     (unqual "questiontext")

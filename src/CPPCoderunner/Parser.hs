@@ -177,8 +177,11 @@ preAllocation = "PreAllocation"
 test :: String
 test = "Tests"
 
+name :: String
+name = "Name"
+
 headlines :: [String]
-headlines = [parameter, task, solution, preAllocation, test]
+headlines = [parameter, task, solution, preAllocation, test, name]
 
 -- * Parser type
 
@@ -207,10 +210,11 @@ coderunnerParser :: Parser Template
 coderunnerParser =
   Template
     placeholder
-    <$> parameterSectionParser
-    <*> simpleSectionParser task
-    <*> simpleSectionParser solution
-    <*> simpleSectionParser preAllocation
+    <$> simpleSectionParser name
+    <*> parameterSectionParser
+    <*> sectionParser task
+    <*> sectionParser solution
+    <*> sectionParser preAllocation
     <*> testSectionParser
 
 -- * Parameter Section
@@ -290,8 +294,8 @@ idUsageValuePartParser = do
 
 -- * Other Sections
 
-simpleSectionParser :: String -> Parser Section
-simpleSectionParser headline = do
+sectionParser :: String -> Parser Section
+sectionParser headline = do
   Section placeholder
     <$> headlineParser headline
     <*> some (sectionBodyComponentParser $ headlineOneOfParser headlines)
@@ -390,6 +394,19 @@ callPartParser = do
 
 argsParser :: Parser [String]
 argsParser = sepBy argParser comma
+
+-- * Simple Section
+
+simpleSectionParser :: String -> Parser SimpleSection
+simpleSectionParser hl = do
+  _ <- headlineParser hl
+  b <- some simpleSectionComponentParser
+  return $ SimpleSection placeholder hl (concat b)
+
+simpleSectionComponentParser :: Parser String
+simpleSectionComponentParser = do
+  notFollowedBy $ headlineOneOfParser headlines
+  ((: []) <$> printChar) <|> eol
 
 -- * Lexemes
 

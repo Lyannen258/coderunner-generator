@@ -111,7 +111,7 @@ addToConfiguration :: Configuration -> PR.ParameterName -> Int -> [Either String
 addToConfiguration c n i singleMultiE
   | not (null ls) && null rs && i < length ls =
     return $ C.addSingleParameter n (ls !! i) ls c
-  | not (null rs) && null ls && i > length rs =
+  | not (null rs) && null ls && i < length rs =
     return $ C.addMultiParameter n (rs !! i) rs c
   | otherwise = lift . throwE $ "Something went wrong"
   where

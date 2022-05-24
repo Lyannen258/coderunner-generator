@@ -34,6 +34,7 @@ placeholder = Position 0 0 0 0
 -- | Represents a template file as an abstract syntax tree
 data Template = Template
   { templatePosition :: Position,
+    templateNameSection :: SimpleSection,
     templateParameterSection :: ParameterSection,
     templateTaskSection :: Section,
     templateSolutionSection :: Section,
@@ -153,6 +154,16 @@ data TestCase = TestCase
   }
   deriving (Show)
 
+-- ** Simple Section Definitions
+
+-- | Represents a simple section where no parameter usages are allowed.
+data SimpleSection = SimpleSection
+  { simpleSectionPosition :: Position,
+    simpleSectionHeadline :: String,
+    simpleSectionBody :: String
+  }
+  deriving (Show)
+
 -- Generate Lenses
 
 makeLenses ''Position
@@ -167,3 +178,4 @@ makeFields ''CallPart
 makeFields ''Section
 makeFields ''TestSection
 makeFields ''TestCase
+makeFields ''SimpleSection

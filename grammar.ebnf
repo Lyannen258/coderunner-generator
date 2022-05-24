@@ -24,6 +24,7 @@ Args = [Argument, {",", Argument}]
 Argument = ArgChar, {ArgChar}
 StringOutput = "\"", StringChar, "\""
 
+SimpleSection = OtherHeadline, {BodyChar}
 
 OtherSection = OtherHeadline, {BodyChar | Output | BlockComment} (* Eats up every succeeding whitespace *)
 
