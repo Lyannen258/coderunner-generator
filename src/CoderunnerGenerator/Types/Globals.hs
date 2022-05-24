@@ -15,17 +15,17 @@ import CoderunnerGenerator.Types.Configuration
 
 data Globals s = Globals
   { parser :: String -> Either String (ParseResult, s),
-    generator :: [Configuration] -> s -> Either String [String],
+    generator :: [Configuration] -> s -> Either String String,
     args :: Args
   }
 
-constructGlobals :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> Either String [String]) -> Args -> Globals s
+constructGlobals :: (String -> Either String (ParseResult, s)) -> ([Configuration] -> s -> Either String String) -> Args -> Globals s
 constructGlobals = Globals
 
 getParser :: Globals s -> (String -> Either String (ParseResult, s))
 getParser = parser
 
-getGenerator :: Globals s -> ([Configuration] -> s -> Either String [String])
+getGenerator :: Globals s -> ([Configuration] -> s -> Either String String)
 getGenerator = generator
 
 getTemplateFilePath :: Globals s -> String

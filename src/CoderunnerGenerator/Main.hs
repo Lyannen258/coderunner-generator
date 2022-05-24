@@ -27,7 +27,7 @@ main = do
 
   generator <- asks getGenerator
   results <- lift . except $ generator configs s
-  writeResults results
+  writeResult results
 
   liftIO $ putStrLn $ "Generated " ++ (show . length) results ++ " instances"
 
@@ -38,6 +38,10 @@ readTemplateFile = do
   inputHandle <- liftIO $ openFile filePath ReadMode
   liftIO $ hSetEncoding inputHandle utf8
   liftIO $ hGetContents inputHandle
+
+-- | Write single result
+writeResult :: String -> App s ()
+writeResult = writeToFile "result.xml"
 
 -- | Write results to the output files
 writeResults :: [String] -> App s ()

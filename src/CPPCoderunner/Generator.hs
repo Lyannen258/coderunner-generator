@@ -14,13 +14,16 @@ valueNotFoundErr p = "No value found for usage of parameter '" ++ p ++ "'"
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
 
-generate :: [Configuration] -> Template -> Either String [String]
-generate configs tem = mapM f configs
+generate :: [Configuration] -> Template -> Either String String
+generate configs tem = do
+  elements <- mapM f configs
+  let doc = node (unqual "quiz") elements
+  return $ ppTopElement doc
   where
-    f :: Configuration -> Either String String
+    f :: Configuration -> Either String Element
     f config = generateConfiguration config tem
 
-generateConfiguration :: Configuration -> Template -> Either String String
+generateConfiguration :: Configuration -> Template -> Either String Element
 generateConfiguration conf tmpl = do
   ts <- generateTaskSection conf tmpl
   ss <- generateSolutionSection conf tmpl
@@ -124,52 +127,49 @@ generateSection conf = foldM f ""
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 
-buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Template -> Either String String
+buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Template -> Either String Element
 buildOutput _ task solution preAllocation tests t =
-  let xmlDoc :: Element
-      xmlDoc =
-        node (unqual "quiz") $
-          add_attr
-            (Attr (unqual "type") "coderunner")
-            ( node
-                (unqual "question")
-                [ node
-                    (unqual "name")
-                    ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing)
-                    ),
-                  node
-                    (unqual "questiontext")
-                    ( Attr (unqual "format") "html",
-                      node (unqual "text") (CData CDataText task Nothing)
-                    ),
-                  node (unqual "defaultgrade") (CData CDataText "1" Nothing),
-                  node (unqual "penalty") (CData CDataText "0" Nothing),
-                  node (unqual "hidden") (CData CDataText "0" Nothing),
-                  node (unqual "coderunnertype") (CData CDataText "cpp_function" Nothing),
-                  node (unqual "prototypetype") (CData CDataText "0" Nothing),
-                  node (unqual "allornothing") (CData CDataText "1" Nothing),
-                  node (unqual "penaltyregime") (CData CDataText "10, 20, ..." Nothing),
-                  node (unqual "precheck") (CData CDataText "0" Nothing),
-                  node (unqual "hidecheck") (CData CDataText "0" Nothing),
-                  node (unqual "showsource") (CData CDataText "0" Nothing),
-                  node (unqual "answerboxlines") (CData CDataText "18" Nothing),
-                  node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
-                  node (unqual "answerpreload") (CData CDataVerbatim preAllocation Nothing),
-                  moodleTemplate solution,
-                  node (unqual "validateonsave") (CData CDataText "1" Nothing),
-                  node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
-                  node (unqual "templateparamslang") (CData CDataText "twig" Nothing),
-                  node (unqual "templateparamsevalpertry") (CData CDataText "0" Nothing),
-                  node (unqual "templateparamsevald") (CData CDataText "{}" Nothing),
-                  node (unqual "twigall") (CData CDataText "0" Nothing),
-                  node (unqual "attachments") (CData CDataText "0" Nothing),
-                  node (unqual "attachmentsrequired") (CData CDataText "0" Nothing),
-                  node (unqual "maxfilesize") (CData CDataText "10240" Nothing),
-                  node (unqual "displayfeedback") (CData CDataText "1" Nothing),
-                  node (unqual "testcases") (testNodes tests)
-                ]
-            )
-   in return $ ppTopElement xmlDoc
+  return $
+    add_attr
+      (Attr (unqual "type") "coderunner")
+      ( node
+          (unqual "question")
+          [ node
+              (unqual "name")
+              ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing)
+              ),
+            node
+              (unqual "questiontext")
+              ( Attr (unqual "format") "html",
+                node (unqual "text") (CData CDataText task Nothing)
+              ),
+            node (unqual "defaultgrade") (CData CDataText "1" Nothing),
+            node (unqual "penalty") (CData CDataText "0" Nothing),
+            node (unqual "hidden") (CData CDataText "0" Nothing),
+            node (unqual "coderunnertype") (CData CDataText "cpp_function" Nothing),
+            node (unqual "prototypetype") (CData CDataText "0" Nothing),
+            node (unqual "allornothing") (CData CDataText "1" Nothing),
+            node (unqual "penaltyregime") (CData CDataText "10, 20, ..." Nothing),
+            node (unqual "precheck") (CData CDataText "0" Nothing),
+            node (unqual "hidecheck") (CData CDataText "0" Nothing),
+            node (unqual "showsource") (CData CDataText "0" Nothing),
+            node (unqual "answerboxlines") (CData CDataText "18" Nothing),
+            node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
+            node (unqual "answerpreload") (CData CDataVerbatim preAllocation Nothing),
+            moodleTemplate solution,
+            node (unqual "validateonsave") (CData CDataText "1" Nothing),
+            node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
+            node (unqual "templateparamslang") (CData CDataText "twig" Nothing),
+            node (unqual "templateparamsevalpertry") (CData CDataText "0" Nothing),
+            node (unqual "templateparamsevald") (CData CDataText "{}" Nothing),
+            node (unqual "twigall") (CData CDataText "0" Nothing),
+            node (unqual "attachments") (CData CDataText "0" Nothing),
+            node (unqual "attachmentsrequired") (CData CDataText "0" Nothing),
+            node (unqual "maxfilesize") (CData CDataText "10240" Nothing),
+            node (unqual "displayfeedback") (CData CDataText "1" Nothing),
+            node (unqual "testcases") (testNodes tests)
+          ]
+      )
 
 testNodes :: [(String, String)] -> [Element]
 testNodes = map f
