@@ -39,7 +39,7 @@ import qualified Data.Sequence as Seq
 newtype ParseResult = ParseResult ParameterComposition -- maybe add Enumeration in future
   deriving (Show)
 
--- | Holds information about the composition of paramters, e.g.
+-- | Holds information about the composition of parameters, e.g.
 -- - values for parameters
 -- - constraints between parameters
 data ParameterComposition = ParameterComposition
