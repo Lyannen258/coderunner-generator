@@ -29,87 +29,47 @@ constructParseResult tem = foldM f PR.empty parameterStatements'
     f pr ps =
       let psMain = ps ^. main
           psReq = ps ^. requires
-
-          toPRValue :: ParameterValue -> PR.Value
-          toPRValue (ParameterValue pvps) =
-            if any isIdUsage pvps
-              then PR.NeedsInput (map toPRValuePart pvps)
-              else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
-
-          toPRValuePart :: ParameterValuePart -> PR.ValuePart
-          toPRValuePart (Simple s) = PR.StringPart s
-          toPRValuePart (IdUsage n) = PR.ParameterPart n
        in case psMain of
             SingleParameterPart mainId mainPVS ->
               case psReq of
-                Nothing -> PR.addParameter pr $ PR.singleParam mainId (map toPRValue mainPVS)
+                Nothing -> PR.addParameter pr $ PR.makeParam mainId (map toPRValue mainPVS)
                 Just (SingleParameterPart reqId reqPVS) ->
-                  if length mainPVS == length reqPVS
-                    then do
-                      pr' <- PR.addParameter pr $ PR.singleParam mainId (map toPRValue mainPVS)
-                      pr'' <- PR.addParameter pr' $ PR.singleParam reqId (map toPRValue reqPVS)
-                      let valuePairs = zip mainPVS reqPVS
-                      foldM
-                        ( \prl (m, r) ->
-                            PR.addConstraint
-                              prl
-                              (mainId, (PR.singleValue . toPRValue) m)
-                              (reqId, (PR.singleValue . toPRValue) r)
-                        )
-                        pr''
-                        valuePairs
-                    else Left ""
+                  addToPR pr mainId (map toPRValue mainPVS) reqId (map toPRValue reqPVS)
                 Just (MultiParameterPart reqId reqPVSS) ->
-                  if length mainPVS == length reqPVSS
-                    then do
-                      pr' <- PR.addParameter pr $ PR.singleParam mainId (map toPRValue mainPVS)
-                      pr'' <- PR.addParameter pr' $ PR.multiParam reqId (map (map toPRValue) reqPVSS)
-                      let pairs = zip mainPVS reqPVSS
-                      foldM
-                        ( \prP (m, r) ->
-                            PR.addConstraint
-                              prP
-                              (mainId, (PR.singleValue . toPRValue) m)
-                              (reqId, (PR.multiValue . map toPRValue) r)
-                        )
-                        pr''
-                        pairs
-                    else Left ""
+                  addToPR pr mainId (map toPRValue mainPVS) reqId (map (map toPRValue) reqPVSS)
             MultiParameterPart mainId mainPVSS ->
               case psReq of
-                Nothing -> PR.addParameter pr $ PR.multiParam mainId (map (map toPRValue) mainPVSS)
+                Nothing -> PR.addParameter pr $ PR.makeParam mainId (map (map toPRValue) mainPVSS)
                 Just (SingleParameterPart reqId reqPVS) ->
-                  if length mainPVSS == length reqPVS
-                    then do
-                      pr' <- PR.addParameter pr $ PR.multiParam mainId (map (map toPRValue) mainPVSS)
-                      pr'' <- PR.addParameter pr' $ PR.singleParam reqId (map toPRValue reqPVS)
-                      let valuePairs = zip mainPVSS reqPVS
-                      foldM
-                        ( \prl (m, r) ->
-                            PR.addConstraint
-                              prl
-                              (mainId, (PR.multiValue . map toPRValue) m)
-                              (reqId, (PR.singleValue . toPRValue) r)
-                        )
-                        pr''
-                        valuePairs
-                    else Left ""
+                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map toPRValue reqPVS)
                 Just (MultiParameterPart reqId reqPVSS) ->
-                  if length mainPVSS == length reqPVSS
-                    then do
-                      pr' <- PR.addParameter pr $ PR.multiParam mainId (map (map toPRValue) mainPVSS)
-                      pr'' <- PR.addParameter pr' $ PR.multiParam reqId (map (map toPRValue) reqPVSS)
-                      let pairs = zip mainPVSS reqPVSS
-                      foldM
-                        ( \prl (m, r) ->
-                            PR.addConstraint
-                              prl
-                              (mainId, (PR.multiValue . map toPRValue) m)
-                              (reqId, (PR.multiValue . map toPRValue) r)
-                        )
-                        pr''
-                        pairs
-                    else Left ""
+                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map (map toPRValue) reqPVSS)
+
+toPRValue :: ParameterValue -> PR.Value
+toPRValue (ParameterValue pvps) =
+  if any isIdUsage pvps
+    then PR.NeedsInput (map toPRValuePart pvps)
+    else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
+
+toPRValuePart :: ParameterValuePart -> PR.ValuePart
+toPRValuePart (Simple s) = PR.StringPart s
+toPRValuePart (IdUsage n) = PR.ParameterPart n
+
+addToPR :: (PR.MakeParam v1, PR.MakeParam v2) => ParseResult -> Identifier -> [v1] -> Identifier -> [v2] -> Either String ParseResult
+addToPR pr mainId mainVs reqId reqVs =
+  if length mainVs == length reqVs
+    then do
+      pr' <- PR.addParameter pr $ PR.makeParam mainId mainVs
+      pr'' <- PR.addParameter pr' $ PR.makeParam reqId reqVs
+      let pairs = zip mainVs reqVs
+      foldM f pr'' pairs
+    else Left ""
+  where
+    f prLocal (m, r) =
+      PR.addConstraint
+        prLocal
+        (mainId, PR.makeValue m)
+        (reqId, PR.makeValue r)
 
 parseTemplate :: String -> Either String Template
 parseTemplate template =

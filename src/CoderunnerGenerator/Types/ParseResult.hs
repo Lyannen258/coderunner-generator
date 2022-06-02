@@ -7,10 +7,8 @@ module CoderunnerGenerator.Types.ParseResult
     ParameterValue (SingleValue, MultiValue),
     Parameter (Parameter),
     getParameter,
-    singleValue,
-    multiValue,
-    singleParam,
-    multiParam,
+    makeParam,
+    makeValue,
     addParameter,
     addConstraint,
     empty,
@@ -26,6 +24,7 @@ module CoderunnerGenerator.Types.ParseResult
     getAtIndexSingle,
     getAtIndexMulti,
     containsMultiParamUsage,
+    MakeParam,
   )
 where
 
@@ -84,21 +83,22 @@ data ValuePart
 data Constraint = Constraint (ParameterName, Int) (ParameterName, Int)
   deriving (Show, Eq)
 
--- | Construct a 'Parameter' with 'SingleValues'
-singleParam :: ParameterName -> [Value] -> Parameter
-singleParam pn vs = Parameter pn $ Seq.fromList (map SingleValue vs)
+-- Construct a 'Parameter' with different types of values
+class MakeParam v where
+  makeValue :: v -> ParameterValue
+  makeParam :: ParameterName -> [v] -> Parameter
 
--- | Construct a 'Parameter' with 'MultiValues'
-multiParam :: ParameterName -> [[Value]] -> Parameter
-multiParam pn vs = Parameter pn $ Seq.fromList (map (MultiValue . Seq.fromList) vs)
+instance MakeParam Value where
+  -- | Construct a 'Parameter' with 'SingleValues'
+  makeParam pn vs = Parameter pn $ Seq.fromList (map SingleValue vs)
+  -- | Construct a single value
+  makeValue = SingleValue
 
--- | Construct a single value
-singleValue :: Value -> ParameterValue
-singleValue = SingleValue
-
--- | Construct a multi value
-multiValue :: [Value] -> ParameterValue
-multiValue = MultiValue . Seq.fromList
+instance MakeParam [Value] where
+  -- | Construct a 'Parameter' with 'MultiValues'
+  makeParam pn vs = Parameter pn $ Seq.fromList (map (MultiValue . Seq.fromList) vs)
+  -- | Construct a multi value
+  makeValue = MultiValue . Seq.fromList
 
 -- | Add values for a parameter to a 'ParseResult'. Duplicate values
 -- will not be added, if there are already values for the parameter.
