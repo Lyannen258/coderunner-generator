@@ -5,11 +5,9 @@
 
 module CoderunnerGenerator.Types.Configuration
   ( Configuration,
-    Parameter,
     ParameterName,
     empty,
-    addSingleParameter,
-    addMultiParameter,
+    addParameter,
     getSingleValue,
     getMultiValue,
     contains,
@@ -30,26 +28,30 @@ data Configuration = Configuration
   }
   deriving (Show)
 
-data Parameter = Single SingleParameter | Multi MultiParameter
-  deriving (Show)
-
-data SingleParameter = SingleParameter
-  { _singleParameterName :: ParameterName,
-    _singleParameterSelectedValue :: String,
-    _singleParameterAllValues :: [String]
+data Parameter = Parameter
+  { name :: ParameterName,
+    valueComponent :: ValueComponent
   }
   deriving (Show)
 
-data MultiParameter = MultiParameter
-  { _multiParameterName :: ParameterName,
-    _multiParameterSelectedValueRange :: [String],
-    _multiParameterAllValueRanges :: [[String]]
+data ValueComponent = Single SingleComponent | Multi MultiComponent
+  deriving (Show)
+
+data SingleComponent = SingleComponent
+  { _singleComponentSelectedValue :: String,
+    _singleComponentAllValues :: [String]
+  }
+  deriving (Show)
+
+data MultiComponent = MultiComponent
+  { _multiComponentSelectedValueRange :: [String],
+    _multiComponentAllValueRanges :: [[String]]
   }
   deriving (Show)
 
 type ParameterName = String
 
-data GeneralInfo = GeneralInfo 
+data GeneralInfo = GeneralInfo
   { taskName :: String,
     author :: String,
     fileName :: String,
@@ -57,31 +59,34 @@ data GeneralInfo = GeneralInfo
   }
   deriving (Show)
 
-makeFields ''SingleParameter
-makeFields ''MultiParameter
+makeFields ''SingleComponent
+makeFields ''MultiComponent
 
 empty :: Configuration
 empty = Configuration [] (GeneralInfo "" "" "" "") -- TODO add real general info
 
-addSingleParameter :: String -> String -> [String] -> Configuration -> Configuration
-addSingleParameter pn sv avs c = c {parameters = parameters c ++ [Single (SingleParameter pn sv avs)]}
+class ParameterValue v where
+  addParameter :: String -> v -> [v] -> Configuration -> Configuration
 
-addMultiParameter :: String -> [String] -> [[String]] -> Configuration -> Configuration
-addMultiParameter pn sv avs c = c {parameters = parameters c ++ [Multi (MultiParameter pn sv avs)]}
+instance ParameterValue String where
+  addParameter pn sv avs c = c {parameters = parameters c ++ [Parameter pn (Single (SingleComponent sv avs))]}
+
+instance ParameterValue [String] where
+  addParameter pn sv avs c = c {parameters = parameters c ++ [Parameter pn (Multi (MultiComponent sv avs))]}
 
 getSingleValue :: Configuration -> ParameterName -> Maybe String
 getSingleValue c pn = do
-  param <- getParameter c pn
-  case param of
-    Single sp -> return $ sp ^. selectedValue
+  vc <- getValueComponent c pn
+  case vc of
+    Single sc -> return $ sc ^. selectedValue
     Multi _ -> Nothing
 
 getMultiValue :: Configuration -> ParameterName -> Maybe [String]
 getMultiValue c pn = do
-  param <- getParameter c pn
-  case param of
+  vc <- getValueComponent c pn
+  case vc of
     Single _ -> Nothing
-    Multi mp -> return $ mp ^. selectedValueRange
+    Multi mc -> return $ mc ^. selectedValueRange
 
 contains :: Configuration -> ParameterName -> Bool
 contains c pn = case getParameter c pn of
@@ -92,8 +97,10 @@ getParameter :: Configuration -> ParameterName -> Maybe Parameter
 getParameter c pn = find f (parameters c)
   where
     f :: Parameter -> Bool
-    f (Single sp) = sp ^. name == pn
-    f (Multi mp) = mp ^. name == pn
+    f (Parameter pn' _) = pn == pn'
+
+getValueComponent :: Configuration -> ParameterName -> Maybe ValueComponent
+getValueComponent c pn = valueComponent <$> getParameter c pn
 
 evaluateMethod :: Configuration -> ParameterName -> String -> [String] -> Either String [String] -- String is function name, First [String] is arguments, returned [String] is result
 evaluateMethod conf pn "all" _ = getAllValues conf pn
@@ -105,12 +112,12 @@ evaluateMethod conf pn fn@"random" [arg] = do
 evaluateMethod _ _ fnName args = Left $ noMatchingMethodErr fnName args
 
 getAllValues :: Configuration -> ParameterName -> Either String [String]
-getAllValues conf pn = case param of
+getAllValues conf pn = case vc of
   Nothing -> Left $ paramNotSetErr pn
   Just (Single p) -> return $ p ^. allValues
   Just (Multi p) -> return $ p ^. selectedValueRange
   where
-    param = getParameter conf pn
+    vc = getValueComponent conf pn
 
 noMatchingMethodErr :: String -> [String] -> String
 noMatchingMethodErr m args =
