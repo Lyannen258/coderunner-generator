@@ -63,7 +63,7 @@ addToPR pr mainId mainVs reqId reqVs =
       pr'' <- PR.addParameter pr' $ PR.makeParam reqId reqVs
       let pairs = zip mainVs reqVs
       foldM f pr'' pairs
-    else Left ""
+    else Left $ "Value ranges of " ++ mainId ++ " and " ++ reqId ++ " do not have the same amount of values in requires constraint."
   where
     f prLocal (m, r) =
       PR.addConstraint
