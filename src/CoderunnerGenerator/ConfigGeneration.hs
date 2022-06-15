@@ -79,7 +79,9 @@ getNDistinct amountNumbers amountConfigs = fillToN []
          in fillToN (rand : acc) newGen
 
 generateConfiguration :: ParseResult -> ConfigListRaw -> Int -> App s Configuration
-generateConfiguration pr configs rand = snd <$> foldM f (configRaw, empty) configRaw
+generateConfiguration pr configs rand = do
+  emptyC <- (lift . lift) empty
+  snd <$> foldM f (configRaw, emptyC) configRaw
   where
     configRaw = configs !! rand
 
