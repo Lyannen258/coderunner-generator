@@ -21,10 +21,12 @@ import Data.List (intercalate)
 import Lens.Micro ((^.))
 import Lens.Micro.TH (makeFields)
 import Text.Read (readMaybe)
+import System.Random
 
 data Configuration = Configuration
   { parameters :: [Parameter],
-    generalInfo :: GeneralInfo
+    generalInfo :: GeneralInfo,
+    randomNumbers :: [Int]
   }
   deriving (Show)
 
@@ -62,8 +64,9 @@ data GeneralInfo = GeneralInfo
 makeFields ''SingleComponent
 makeFields ''MultiComponent
 
-empty :: Configuration
-empty = Configuration [] (GeneralInfo "" "" "" "") -- TODO add real general info
+empty :: IO Configuration
+empty = do
+  Configuration [] (GeneralInfo "" "" "" "") . randoms <$> getStdGen -- TODO add real general info
 
 class ParameterValue v where
   addParameter :: String -> v -> [v] -> Configuration -> Configuration
@@ -107,8 +110,8 @@ evaluateMethod conf pn "all" _ = getAllValues conf pn
 evaluateMethod conf pn fn@"random" [arg] = do
   allVs <- getAllValues conf pn
   amount <- maybeToEither (readMaybe arg) (argumentMustBeTypeErr fn "1" "int")
-  return $ take amount allVs
--- TODO add actual randomness
+  let rs = take amount (randomNumbers conf)
+  return $ map (\r -> allVs !! (r `mod` length allVs)) rs
 evaluateMethod _ _ fnName args = Left $ noMatchingMethodErr fnName args
 
 getAllValues :: Configuration -> ParameterName -> Either String [String]
