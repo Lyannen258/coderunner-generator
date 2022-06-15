@@ -1,8 +1,9 @@
-module CoderunnerGenerator.Main where
+module CoderunnerGenerator.Main (main) where
 
-import CoderunnerGenerator.ConfigGeneration (computeConfigurations)
+import CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount)
 import CoderunnerGenerator.Types.App (App)
 import CoderunnerGenerator.Types.Globals
+import CoderunnerGenerator.Types.ParseResult (ParseResult)
 import Control.Monad (foldM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -12,6 +13,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, (</>))
 import System.IO
 import Text.Pretty.Simple (pPrint)
+import CoderunnerGenerator.Helper (printLn)
 
 main :: App s ()
 main = do
@@ -22,6 +24,19 @@ main = do
   (parseResult, s) <- lift . except $ parser fileContent
   debugOutput parseResult
 
+  maxFlagActive <- asks getMaxConfigurations
+  if maxFlagActive
+    then mainMaxAmount parseResult
+    else mainConfigurations parseResult s
+
+mainMaxAmount :: ParseResult -> App s ()
+mainMaxAmount pr = do
+  maxAmount <- computeMaxAmount pr
+  printLn (show maxAmount)
+  return ()
+
+mainConfigurations :: ParseResult -> s -> App s ()
+mainConfigurations parseResult s = do
   configs <- computeConfigurations parseResult
   debugOutput configs
 
@@ -29,7 +44,7 @@ main = do
   results <- lift . except $ generator configs s
   writeResult results
 
-  liftIO $ putStrLn $ "Generated " ++ (show . length) results ++ " instances"
+  printLn $ "Generated " ++ (show . length) results ++ " instances"
 
 -- | Read content of the template file
 readTemplateFile :: App s String
@@ -53,8 +68,9 @@ writeResults = foldM_ f 1
 -- | Create directory for the output files
 createOutputDirectory :: App s ()
 createOutputDirectory = do
+  maxFlagActive <- asks getMaxConfigurations
   filePath <- asks getTemplateFilePath
-  liftIO $ createDirectoryIfMissing True $ dropExtension filePath
+  when maxFlagActive $ liftIO $ createDirectoryIfMissing True $ dropExtension filePath
 
 -- | Write content to a file in the output directory
 writeToFile :: String -> String -> App s ()

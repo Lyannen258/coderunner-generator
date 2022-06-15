@@ -6,10 +6,11 @@ module CoderunnerGenerator.Types.Globals
     getTemplateFilePath,
     getDebugOutputFlag,
     getAmount,
+    getMaxConfigurations
   )
 where
 
-import CoderunnerGenerator.CmdArgs (Args (amount, debugOutput, templateFile))
+import CoderunnerGenerator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations))
 import CoderunnerGenerator.Types.ParseResult
 import CoderunnerGenerator.Types.Configuration
 
@@ -36,3 +37,6 @@ getDebugOutputFlag = debugOutput . args
 
 getAmount :: Globals s -> Maybe Int
 getAmount = amount . args
+
+getMaxConfigurations :: Globals s -> Bool
+getMaxConfigurations = maxConfigurations . args

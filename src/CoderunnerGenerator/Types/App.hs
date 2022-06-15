@@ -1,4 +1,4 @@
-module CoderunnerGenerator.Types.App where
+module CoderunnerGenerator.Types.App (App) where
 
 import CoderunnerGenerator.Types.Globals (Globals)
 import Control.Monad.Trans.Reader (ReaderT)

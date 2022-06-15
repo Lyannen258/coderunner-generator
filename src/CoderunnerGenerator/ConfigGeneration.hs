@@ -1,4 +1,4 @@
-module CoderunnerGenerator.ConfigGeneration (computeConfigurations) where
+module CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount) where
 
 import CoderunnerGenerator.Helper (maybeToEither, singleton)
 import CoderunnerGenerator.Types.App
@@ -19,6 +19,10 @@ import System.Random (RandomGen, getStdGen, uniformR)
 type ConfigListRaw = [[(ParameterName, Int)]]
 
 type ConfigRaw = [(ParameterName, Int)]
+
+computeMaxAmount :: ParseResult -> App s Int
+computeMaxAmount pr =
+  (return . length . removeForbidden pr . allCombinations) pr
 
 computeConfigurations :: ParseResult -> App s [Configuration]
 computeConfigurations pr = do

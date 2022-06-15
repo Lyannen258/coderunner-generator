@@ -1,4 +1,5 @@
 module CoderunnerGenerator.Helper where
+import Control.Monad.IO.Class (MonadIO(liftIO))
 
 maybeToEither :: Maybe a -> String -> Either String a
 maybeToEither (Just a) _ = Right a
@@ -15,3 +16,6 @@ singleton a = [a]
 
 removeFirst :: (a, b, c) -> (b, c)
 removeFirst (_, b, c) = (b, c)
+
+printLn :: MonadIO m => String -> m ()
+printLn = liftIO . putStrLn

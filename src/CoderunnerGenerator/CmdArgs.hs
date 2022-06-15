@@ -7,7 +7,8 @@ import Options.Applicative
 data Args = Args
   { templateFile :: String,
     amount :: Maybe Int,
-    debugOutput :: Bool
+    debugOutput :: Bool,
+    maxConfigurations :: Bool
   }
   deriving (Show)
 
@@ -24,6 +25,7 @@ parser =
     <$> templateFileParser
     <*> optional amountParser
     <*> debugParser
+    <*> maxParser
 
 templateFileParser :: Parser String
 templateFileParser =
@@ -42,6 +44,12 @@ debugParser =
   switch $
     long "debug"
     <> short 'd'
+
+maxParser :: Parser Bool
+maxParser =
+  switch $
+    long "max"
+    <> short 'm'
 
 
 -- * Execution function
