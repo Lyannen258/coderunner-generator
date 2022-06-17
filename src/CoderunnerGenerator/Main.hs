@@ -32,8 +32,14 @@ main = do
 mainMaxAmount :: ParseResult -> App s ()
 mainMaxAmount pr = do
   maxAmount <- computeMaxAmount pr
-  printLn (show maxAmount)
+  printMaxAmount maxAmount
   return ()
+
+printMaxAmount :: Int -> App s ()
+printMaxAmount m = do
+  printLn output
+  where 
+    output = "Maximal amount of configurations: " ++ show m
 
 mainConfigurations :: ParseResult -> s -> App s ()
 mainConfigurations parseResult s = do
@@ -44,7 +50,7 @@ mainConfigurations parseResult s = do
   results <- lift . except $ generator configs s
   writeResult results
 
-  printLn $ "Generated " ++ (show . length) results ++ " instances"
+  printLn $ "Generated " ++ (show . length) configs ++ " variants"
 
 -- | Read content of the template file
 readTemplateFile :: App s String

@@ -1,12 +1,12 @@
 module CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount) where
 
-import CoderunnerGenerator.Helper (maybeToEither, singleton)
+import CoderunnerGenerator.Helper (maybeToEither, printLn, singleton)
 import CoderunnerGenerator.Types.App
 import CoderunnerGenerator.Types.Configuration as C
 import CoderunnerGenerator.Types.Globals (getAmount)
 import CoderunnerGenerator.Types.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
 import qualified CoderunnerGenerator.Types.ParseResult as PR
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE)
 import Control.Monad.Trans.Reader (asks)
@@ -29,7 +29,8 @@ computeConfigurations pr = do
   let combs = allCombinations pr
   let withoutForbidden = removeForbidden pr combs
   amountMaybe <- asks getAmount
-  let amount = fromMaybe 0 amountMaybe
+  let amount = fromMaybe (length withoutForbidden) amountMaybe
+  printAttemptedAmount amount (length withoutForbidden)
   randomNumbers <- getRandomNumbers amount (length withoutForbidden)
   let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
   sequence configurations
@@ -66,6 +67,20 @@ removeForbidden pr = filter f
 
     constraints :: [Constraint]
     constraints = PR.getConstraints pr
+
+printAttemptedAmount :: Int -> Int -> App s ()
+printAttemptedAmount requestedA maxA = do
+  printLn $ show requestedA ++ " variants requested"
+  when (requestedA > maxA) $
+    printLn $
+      show requestedA
+        ++ " variants not possible. Generating "
+        ++ show maxA
+        ++ " variants."
+  when (requestedA < 0) $
+    printLn $
+      show requestedA
+        ++ " variants not possible. Generating 0 variants."
 
 getRandomNumbers :: Int -> Int -> App s [Int]
 getRandomNumbers amountNumbers amountConfigs = do

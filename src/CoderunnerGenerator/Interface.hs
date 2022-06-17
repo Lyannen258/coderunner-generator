@@ -21,8 +21,8 @@ run parser generator = handleErrors $ do
   let g = constructGlobals parser generator args
   res <- runExceptT (runReaderT main g)
   case res of
-    Left s -> putStrLn s
-    Right _ -> putStrLn "No exceptions occured"
+    Left s -> putStrLn $ "Error: " ++ s
+    Right _ -> return ()
 
 handleErrors :: IO () -> IO ()
 handleErrors action = do
