@@ -4,18 +4,23 @@ import qualified CoderunnerGenerator.CmdArgs as CmdArgs
 import CoderunnerGenerator.Main (main)
 import CoderunnerGenerator.Types.Configuration (Configuration)
 import CoderunnerGenerator.Types.Globals (constructGlobals)
-import CoderunnerGenerator.Types.ParseResult (ParseResult)
+import CoderunnerGenerator.Types.ToParseResult
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 
-type ParserFunction s =
-  (String -> Either String (ParseResult, s))
+-- | r is the return that the run function works with,
+-- u is the user state that is fed to the generator function
+-- without alteration (usually you want to save your ast in u)
+type ParserFunction r u =
+  String -> Either String (r, u)
 
-type GeneratorFunction s =
-  ([Configuration] -> s -> Either String String)
+-- | u is the user state that was returned from the parser function
+type GeneratorFunction u =
+  [Configuration] -> u -> Either String String
 
-run :: ParserFunction s -> GeneratorFunction s -> IO ()
+-- | The run function
+run :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s -> IO ()
 run parser generator = handleErrors $ do
   args <- CmdArgs.executeParser
   let g = constructGlobals parser generator args

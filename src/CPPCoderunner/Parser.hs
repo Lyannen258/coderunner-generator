@@ -1,75 +1,19 @@
 module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 
 import CPPCoderunner.AbstractSyntaxTree
-import CoderunnerGenerator.Types.ParseResult (ParseResult)
-import qualified CoderunnerGenerator.Types.ParseResult as PR
-import Control.Monad (foldM)
-import Data.Foldable (foldl')
-import Data.Void (Void)
+import CoderunnerGenerator.ParameterParser
+import CoderunnerGenerator.ParserUtils
+import CoderunnerGenerator.Types.ParameterAST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
 
 -- * Interface
 
-parse :: String -> Either String (ParseResult, Template)
+parse :: String -> Either String (ParameterAST, Template)
 parse s = do
   tmpl <- parseTemplate s
-  pr <- constructParseResult tmpl
-  return (pr, tmpl)
-
-constructParseResult :: Template -> Either String ParseResult
-constructParseResult tem = foldM f PR.empty parameterStatements'
-  where
-    parameterStatements' :: [ParameterStatement]
-    parameterStatements' = tem ^. parameterSection . parameterBody . parameterStatements
-
-    f :: ParseResult -> ParameterStatement -> Either String ParseResult
-    f pr ps =
-      let psMain = ps ^. main
-          psReq = ps ^. requires
-       in case psMain of
-            SingleParameterPart mainId mainPVS ->
-              case psReq of
-                Nothing -> PR.addParameter pr $ PR.makeParam mainId (map toPRValue mainPVS)
-                Just (SingleParameterPart reqId reqPVS) ->
-                  addToPR pr mainId (map toPRValue mainPVS) reqId (map toPRValue reqPVS)
-                Just (MultiParameterPart reqId reqPVSS) ->
-                  addToPR pr mainId (map toPRValue mainPVS) reqId (map (map toPRValue) reqPVSS)
-            MultiParameterPart mainId mainPVSS ->
-              case psReq of
-                Nothing -> PR.addParameter pr $ PR.makeParam mainId (map (map toPRValue) mainPVSS)
-                Just (SingleParameterPart reqId reqPVS) ->
-                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map toPRValue reqPVS)
-                Just (MultiParameterPart reqId reqPVSS) ->
-                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map (map toPRValue) reqPVSS)
-
-toPRValue :: ParameterValue -> PR.Value
-toPRValue (ParameterValue pvps) =
-  if any isIdUsage pvps
-    then PR.NeedsInput (map toPRValuePart pvps)
-    else PR.Final (foldl' (\acc (Simple s) -> acc ++ s) "" pvps)
-
-toPRValuePart :: ParameterValuePart -> PR.ValuePart
-toPRValuePart (Simple s) = PR.StringPart s
-toPRValuePart (IdUsage n) = PR.ParameterPart n
-
-addToPR :: (PR.MakeParam v1, PR.MakeParam v2) => ParseResult -> Identifier -> [v1] -> Identifier -> [v2] -> Either String ParseResult
-addToPR pr mainId mainVs reqId reqVs =
-  if length mainVs == length reqVs
-    then do
-      pr' <- PR.addParameter pr $ PR.makeParam mainId mainVs
-      pr'' <- PR.addParameter pr' $ PR.makeParam reqId reqVs
-      let pairs = zip mainVs reqVs
-      foldM f pr'' pairs
-    else Left $ "Value ranges of " ++ mainId ++ " and " ++ reqId ++ " do not have the same amount of values in requires constraint."
-  where
-    f prLocal (m, r) =
-      PR.addConstraint
-        prLocal
-        (mainId, PR.makeValue m)
-        (reqId, PR.makeValue r)
+  return (tmpl ^. parameterSection . parameterBody, tmpl)
 
 parseTemplate :: String -> Either String Template
 parseTemplate template =
@@ -101,27 +45,6 @@ name = "Name"
 headlines :: [String]
 headlines = [parameter, task, solution, preAllocation, test, name]
 
--- * Parser type
-
-type Parser = Parsec Void String
-
--- * Lexemes
-
-blockComment :: Parser ()
-blockComment = L.skipBlockComment "{-" "-}"
-
-whitespace :: Parser ()
-whitespace = L.space space1 empty blockComment
-
-hwhitespace :: Parser ()
-hwhitespace = L.space hspace1 empty blockComment
-
-lexeme :: Parser s -> Parser s
-lexeme = L.lexeme whitespace
-
-hlexeme :: Parser s -> Parser s
-hlexeme = L.lexeme hwhitespace
-
 -- * Main Parser
 
 coderunnerParser :: Parser Template
@@ -141,74 +64,7 @@ parameterSectionParser :: Parser ParameterSection
 parameterSectionParser =
   ParameterSection
     placeholder
-    <$> (parameterHeadlineParser *> parameterBodyParser)
-
-parameterBodyParser :: Parser ParameterBody
-parameterBodyParser =
-  ParameterBody
-    placeholder
-    <$> many parameterStatementParser
-
-parameterStatementParser :: Parser ParameterStatement
-parameterStatementParser = do
-  notFollowedBy $ headlineOneOfParser headlines
-  firstParameterPart <- parameterPartParser
-  secondParameterPart <- optional (requiresParser *> parameterPartParser)
-  return $
-    ParameterStatement placeholder firstParameterPart secondParameterPart
-
-parameterPartParser :: Parser ParameterPart
-parameterPartParser = do
-  i <- identifierParser
-  _ <- openParenth
-  parameterPart <- valueListParser i
-  _ <- closingParenth
-  return parameterPart
-
-valueListParser :: String -> Parser ParameterPart
-valueListParser i =
-  (MultiParameterPart i <$> multiValueListParser)
-    <|> (SingleParameterPart i <$> singleValueListParser)
-
-singleValueListParser :: Parser [ParameterValue]
-singleValueListParser = sepBy valueParser comma
-
-multiValueListParser :: Parser [[ParameterValue]]
-multiValueListParser = sepBy1 valueRangeParser comma
-
-valueRangeParser :: Parser [ParameterValue]
-valueRangeParser =
-  openSquare *> singleValueListParser <* closingSquare
-
-valueParser :: Parser ParameterValue
-valueParser = do
-  _ <- openQuotes
-  valueParts <- some valuePartParser
-  _ <- closingQuotes
-  return $ ParameterValue valueParts
-
-valuePartParser :: Parser ParameterValuePart
-valuePartParser =
-  try simpleValuePartParser <|> idUsageValuePartParser
-
-simpleValuePartParser :: Parser ParameterValuePart
-simpleValuePartParser = do
-  notFollowedBy stringEndLookAhead
-  firstChar <- printChar
-  rest <- manyTill printChar stringEndLookAhead
-  return $ Simple (firstChar : rest)
-
-stringEndLookAhead :: Parser ()
-stringEndLookAhead = do
-  _ <- (try . lookAhead) (fmap (: []) closingQuotes <|> openOutput)
-  return ()
-
-idUsageValuePartParser :: Parser ParameterValuePart
-idUsageValuePartParser = do
-  _ <- openOutput
-  i <- identifierParser
-  _ <- closingOutput
-  return $ IdUsage i
+    <$> (parameterHeadlineParser *> parameterParser (headlineOneOfParser headlines))
 
 -- * Other Sections
 
@@ -322,55 +178,3 @@ simpleSectionComponentParser :: Parser String
 simpleSectionComponentParser = do
   notFollowedBy $ headlineOneOfParser headlines
   ((: []) <$> printChar) <|> eol
-
--- * Lexemes
-
-requiresParser :: Parser String
-requiresParser = lexeme (string "requires")
-
-identifierParser :: Parser String
-identifierParser = lexeme (some letterChar)
-
-parameterHeadlineParser :: Parser String
-parameterHeadlineParser = hlexeme (string "Parameter:" <* eol)
-
-openParenth :: Parser Char
-openParenth = lexeme (char '(')
-
-closingParenth :: Parser Char
-closingParenth = lexeme (char ')')
-
-openSquare :: Parser Char
-openSquare = lexeme (char '[')
-
-closingSquare :: Parser Char
-closingSquare = lexeme (char ']')
-
--- | Do not consume whitespace, because string begins
-openQuotes :: Parser Char
-openQuotes = char '"'
-
-closingQuotes :: Parser Char
-closingQuotes = lexeme (char '"')
-
--- | Exact reverse to openQuotes: Consume whitespace
--- only on opening output, because after closing, the
--- string (parameter value) resumes and we want to conserve
--- whitespace
-openOutput :: Parser String
-openOutput = lexeme (string "{{")
-
-closingOutput :: Parser String
-closingOutput = string "}}"
-
-point :: Parser Char
-point = (lexeme . char) '.'
-
-comma :: Parser Char
-comma = (lexeme . char) ','
-
-argChar :: Parser Char
-argChar = alphaNumChar
-
-argParser :: Parser String
-argParser = (lexeme . some) argChar

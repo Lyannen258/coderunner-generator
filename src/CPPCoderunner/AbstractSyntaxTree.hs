@@ -14,6 +14,7 @@
 module CPPCoderunner.AbstractSyntaxTree where
 
 import Lens.Micro.TH
+import CoderunnerGenerator.Types.ParameterAST (ParameterAST)
 
 -- * Pos type class and type
 
@@ -47,54 +48,9 @@ data Template = Template
 -- | Represents the parameter section
 data ParameterSection = ParameterSection
   { parameterSectionPosition :: Position,
-    parameterSectionParameterBody :: ParameterBody
+    parameterSectionParameterBody :: ParameterAST
   }
   deriving (Show)
-
--- | Represents the parameter body
-data ParameterBody = ParameterBody
-  { parameterBodyPosition :: Position,
-    parameterBodyParameterStatements :: [ParameterStatement]
-  }
-  deriving (Show)
-
--- | Represents parameter statement
-data ParameterStatement = ParameterStatement
-  { parameterStatementPosition :: Position,
-    parameterStatementMain :: ParameterPart,
-    parameterStatementRequires :: Maybe ParameterPart
-  }
-  deriving (Show)
-
--- | Represents a parameter part
---
--- Consists of an identifier and a value list
-data ParameterPart
-  = SingleParameterPart
-      { parameterPartIdentifier :: Identifier,
-        parameterPartValues :: [ParameterValue]
-      }
-  | MultiParameterPart
-      { parameterPartIdentifier :: Identifier,
-        parameterPartValueRanges :: [[ParameterValue]]
-      }
-  deriving (Show)
-
--- | Represents a Parameter Value
---
--- Consists of a list of parameter parts
-newtype ParameterValue = ParameterValue [ParameterValuePart]
-  deriving (Show)
-
--- | Represents a component of a parameter value
---
--- Possible components are simple strings and usages of identifiers
-data ParameterValuePart = Simple String | IdUsage Identifier
-  deriving (Show, Eq, Ord)
-
-isIdUsage :: ParameterValuePart -> Bool
-isIdUsage (Simple _) = False
-isIdUsage (IdUsage _) = True
 
 type Identifier = String
 
@@ -169,9 +125,6 @@ makeLenses ''Position
 
 makeFields ''Template
 makeFields ''ParameterSection
-makeFields ''ParameterBody
-makeFields ''ParameterStatement
-makeFields ''ParameterPart
 makeFields ''ParameterUsage
 makeFields ''CallPart
 makeFields ''Section
