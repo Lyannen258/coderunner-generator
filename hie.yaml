@@ -4,7 +4,7 @@ cradle:
       component: "cpp-moodle-generator:lib"
 
     - path: "cpp-moodle-generator/app/Main.hs"
-      component: "cpp-moodle-generator:exe:cppcoderunner"
+      component: "cpp-moodle-generator:exe:cpp-moodle-generator"
 
     - path: "generator/src"
       component: "generator:lib"
