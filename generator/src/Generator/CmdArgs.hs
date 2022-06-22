@@ -15,7 +15,7 @@ data Args = Args
 -- * Parser Info
 
 parserInfo :: ParserInfo Args
-parserInfo = info parser briefDesc
+parserInfo = info (parser <**> helper) fullDesc
 
 -- * Parsers
 
@@ -32,25 +32,29 @@ templateFileParser =
   strArgument $
     metavar "templateFile"
       <> action "file"
+      <> help "Path to the template file"
 
 amountParser :: Parser Int
 amountParser =
   option auto $
     long "amount"
       <> short 'a'
+      <> metavar "AMOUNT"
+      <> help "Specify the amount of variants to generate"
 
 debugParser :: Parser Bool
 debugParser =
   switch $
     long "debug"
-    <> short 'd'
+      <> short 'd'
+      <> help "Output debug information"
 
 maxParser :: Parser Bool
 maxParser =
   switch $
     long "max"
-    <> short 'm'
-
+      <> short 'm'
+      <> help "Return the maximum amount of variants possible with the given template file"
 
 -- * Execution function
 
