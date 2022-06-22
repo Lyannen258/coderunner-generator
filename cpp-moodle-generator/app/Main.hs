@@ -1,8 +1,8 @@
 module Main where
 
 import Generator.Interface
-import CPPCoderunner.Generator
-import CPPCoderunner.Parser
+import Generator.CPP.Moodle.Generator
+import Generator.CPP.Moodle.Parser
 
 main :: IO ()
 main = run parse generate

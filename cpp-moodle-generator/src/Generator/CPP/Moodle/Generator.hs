@@ -1,6 +1,6 @@
-module CPPCoderunner.Generator (generate) where
+module Generator.CPP.Moodle.Generator (generate) where
 
-import CPPCoderunner.AbstractSyntaxTree
+import Generator.CPP.Moodle.AbstractSyntaxTree
 import Generator.Helper
 import Generator.Configuration
 import Control.Monad (foldM)

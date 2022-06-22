@@ -6,9 +6,9 @@ maintainer:     eriksson@wifa.uni-leipzig.de
 
 library
   exposed-modules:
-      CPPCoderunner.Parser,
-      CPPCoderunner.Generator,
-      CPPCoderunner.AbstractSyntaxTree
+      Generator.CPP.Moodle.Parser,
+      Generator.CPP.Moodle.Generator,
+      Generator.CPP.Moodle.AbstractSyntaxTree
   hs-source-dirs:
       src
   build-depends:

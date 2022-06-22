@@ -1,6 +1,6 @@
-module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
+module Generator.CPP.Moodle.Parser (Generator.CPP.Moodle.Parser.parse) where
 
-import CPPCoderunner.AbstractSyntaxTree
+import Generator.CPP.Moodle.AbstractSyntaxTree
 import Generator.ParameterParser
 import Generator.ParserUtils
 import Generator.ParameterAST (ParameterAST)
