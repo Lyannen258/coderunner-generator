@@ -34,6 +34,7 @@ placeholder = Position 0 0 0 0
 -- | Represents a template file as an abstract syntax tree
 data Template = Template
   { templatePosition :: Position,
+    templateAuthorSection :: SimpleSection,
     templateNameSection :: SimpleSection,
     templateParameterSection :: ParameterSection,
     templateTaskSection :: Section,

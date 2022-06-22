@@ -42,8 +42,11 @@ test = "Tests"
 name :: String
 name = "Name"
 
+author :: String
+author = "Author"
+
 headlines :: [String]
-headlines = [parameter, task, solution, preAllocation, test, name]
+headlines = [parameter, task, solution, preAllocation, test, name, author]
 
 -- * Main Parser
 
@@ -52,6 +55,7 @@ coderunnerParser =
   Template
     placeholder
     <$> simpleSectionParser name
+    <*> simpleSectionParser author
     <*> parameterSectionParser
     <*> sectionParser task
     <*> sectionParser solution
