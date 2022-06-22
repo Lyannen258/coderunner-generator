@@ -1,6 +1,5 @@
 module Generator (run) where
 
-import Control.Exception (SomeException, try)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Generator.CmdArgs as CmdArgs
