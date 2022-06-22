@@ -1,8 +1,8 @@
 module Generator.ToParseResult where
 
-import Generator.ParameterAST (ParameterAST)
+import Generator.ParseResult.Parser.AST (ParameterAST)
 import Generator.ParseResult (ParseResult)
-import qualified Generator.ParseResult as PR
+import Generator.ParseResult.FromAST (fromParameterAST)
 
 -- | Overloading the constructParseResult function for different
 -- return types
@@ -19,4 +19,4 @@ instance ToParseResult ParseResult where
 -- specified syntax. It should be the parameter section of the
 -- template file without the headline.
 instance ToParseResult ParameterAST where
-  toParseResult = PR.fromParameterAST 
+  toParseResult = fromParameterAST 

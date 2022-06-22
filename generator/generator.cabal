@@ -9,13 +9,16 @@ library
       Generator.Helper,
       Generator.Configuration,
       Generator.ParseResult,
-      Generator.ParameterAST,
       Generator,
       Generator.ParserUtils,
-      Generator.ParameterParser,
-      Generator.ParameterName
+      Generator.ParameterName,
+      Generator.ParseResult.Parser.AST,
+      Generator.ParseResult.Parser,
 
   other-modules:
+      Generator.ParseResult.Type,
+      Generator.ParseResult.Info,
+      Generator.ParseResult.FromAST,
       Generator.ToParseResult,
       Generator.Configuration.Construction,
       Generator.Configuration.Type,

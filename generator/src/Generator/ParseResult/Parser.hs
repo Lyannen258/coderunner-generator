@@ -1,14 +1,14 @@
-module Generator.ParameterParser (parameterParser) where
+module Generator.ParseResult.Parser (parser) where
 
 import Generator.ParserUtils
-import Generator.ParameterAST
+import Generator.ParseResult.Parser.AST
 import Text.Megaparsec
 import Text.Megaparsec.Char
 
 -- * Main parsers
 
-parameterParser :: Parser a -> Parser ParameterAST
-parameterParser stopParser =
+parser :: Parser a -> Parser ParameterAST
+parser stopParser =
   ParameterAST
     placeholder
     <$> many (parameterStatementParser stopParser)

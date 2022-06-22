@@ -1,12 +1,5 @@
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
-import Generator.Helper (maybeToEither, printLn, singleton)
-import Generator.App
-import Generator.Configuration as C
-import Generator.Configuration.Construction as C
-import Generator.Globals (getAmount)
-import Generator.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
-import qualified Generator.ParseResult as PR
 import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE)
@@ -15,8 +8,15 @@ import Data.Either (lefts, rights)
 import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
-import System.Random (RandomGen, getStdGen, uniformR)
+import Generator.App
+import Generator.Configuration as C
+import Generator.Configuration.Construction as C
+import Generator.Globals (getAmount)
+import Generator.Helper (maybeToEither, printLn, singleton)
 import Generator.ParameterName
+import Generator.ParseResult.Info as PR
+import Generator.ParseResult.Type as PR
+import System.Random (RandomGen, getStdGen, uniformR)
 
 type ConfigListRaw = [[(ParameterName, Int)]]
 
@@ -60,15 +60,15 @@ removeForbidden :: ParseResult -> ConfigListRaw -> ConfigListRaw
 removeForbidden pr = filter f
   where
     f :: ConfigRaw -> Bool
-    f config = all constraintFulfilled constraints
+    f config = all constraintFulfilled constraintsL
       where
         constraintFulfilled :: Constraint -> Bool
         constraintFulfilled c
           | PR.first c `elem` config = PR.second c `elem` config
           | otherwise = True
 
-    constraints :: [Constraint]
-    constraints = PR.getConstraints pr
+    constraintsL :: [Constraint]
+    constraintsL = PR.getConstraints pr
 
 printAttemptedAmount :: Int -> Int -> App r u ()
 printAttemptedAmount requestedA maxA = do
@@ -127,7 +127,7 @@ buildParameter pr cr c p@(PR.Parameter n vs)
     newC' <- addToConfiguration newC n (snd i) singleMultiE
     return (newCR, newC')
 
-addToConfiguration :: Configuration -> PR.ParameterName -> Int -> [Either String [String]] -> App r u Configuration
+addToConfiguration :: Configuration -> ParameterName -> Int -> [Either String [String]] -> App r u Configuration
 addToConfiguration c n i singleMultiE
   | not (null ls) && null rs && i < length ls =
     return $ C.addParameter n (ls !! i) ls c
@@ -170,7 +170,7 @@ makeFinal pr (stringBuilder, cr, c) vp = case vp of
     (s, newCR, newC) <- evaluateParameterPart pn pr cr c
     return (stringBuilder ++ s, newCR, newC)
 
-evaluateParameterPart :: PR.ParameterName -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, ConfigRaw, Configuration)
+evaluateParameterPart :: ParameterName -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, ConfigRaw, Configuration)
 evaluateParameterPart pn pr cr c =
   let maybeSingleValue = getSingleValue c pn
       maybeSearchedX = find (\x -> fst x == pn) cr
@@ -200,7 +200,7 @@ buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
         (paramValues, newC) <- makeFinalMulti pr cr c' pn
         return ([str ++ param | str <- strs, param <- paramValues], newC)
 
-makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> PR.ParameterName -> App r u ([String], Configuration)
+makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> App r u ([String], Configuration)
 makeFinalMulti pr cr c n = case PR.getParameter pr n of
   Nothing -> lift . throwE $ "Parameter " ++ unParameterName n ++ " is used but not defined."
   Just p -> do
@@ -212,7 +212,7 @@ makeFinalMulti pr cr c n = case PR.getParameter pr n of
         Nothing -> lift . throwE $ "This error should not be happening"
 
 paramNotFoundErr :: ParameterName -> String
-paramNotFoundErr pn = "Found usage of parameter " ++ (unParameterName pn) ++ ", but it was never defined."
+paramNotFoundErr pn = "Found usage of parameter " ++ unParameterName pn ++ ", but it was never defined."
 
 incorrectUsageOfMultiParam :: String
 incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible values or is a multi parameter itself is not allowed"

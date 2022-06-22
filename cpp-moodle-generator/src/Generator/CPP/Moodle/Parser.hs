@@ -1,9 +1,9 @@
 module Generator.CPP.Moodle.Parser (Generator.CPP.Moodle.Parser.parse) where
 
 import Generator.CPP.Moodle.AbstractSyntaxTree
-import Generator.ParameterParser
+import Generator.ParseResult.Parser as PRP
 import Generator.ParserUtils
-import Generator.ParameterAST (ParameterAST)
+import Generator.ParseResult.Parser.AST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -64,7 +64,7 @@ parameterSectionParser :: Parser ParameterSection
 parameterSectionParser =
   ParameterSection
     placeholder
-    <$> (parameterHeadlineParser *> parameterParser (headlineOneOfParser headlines))
+    <$> (parameterHeadlineParser *> PRP.parser (headlineOneOfParser headlines))
 
 -- * Other Sections
 

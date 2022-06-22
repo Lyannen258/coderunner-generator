@@ -14,7 +14,7 @@
 module Generator.CPP.Moodle.AbstractSyntaxTree where
 
 import Lens.Micro.TH
-import Generator.ParameterAST (ParameterAST)
+import Generator.ParseResult.Parser.AST (ParameterAST)
 
 -- * Pos type class and type
 

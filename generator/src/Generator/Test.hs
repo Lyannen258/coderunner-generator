@@ -2,6 +2,7 @@ module Generator.Test where
 
 import Generator.ParseResult as PR
 import Generator.ParameterName (mkParameterName)
+import Generator.ParseResult.Type
 
 simpleParseResultWithoutConstraints :: Either String ParseResult
 simpleParseResultWithoutConstraints = do

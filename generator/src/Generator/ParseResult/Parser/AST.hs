@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Generator.ParameterAST where
+module Generator.ParseResult.Parser.AST where
 
 import Lens.Micro.TH
 
