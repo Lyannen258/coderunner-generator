@@ -1,6 +1,6 @@
-module CoderunnerGenerator.App (App) where
+module Generator.App (App) where
 
-import CoderunnerGenerator.Globals (Globals)
+import Generator.Globals (Globals)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Trans.Except (ExceptT)
 

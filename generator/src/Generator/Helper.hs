@@ -1,4 +1,4 @@
-module CoderunnerGenerator.Helper where
+module Generator.Helper where
 import Control.Monad.IO.Class (MonadIO(liftIO))
 
 maybeToEither :: Maybe a -> String -> Either String a

@@ -1,4 +1,4 @@
-module CoderunnerGenerator.ParserUtils where
+module Generator.ParserUtils where
 
 import Data.Void (Void)
 import Text.Megaparsec

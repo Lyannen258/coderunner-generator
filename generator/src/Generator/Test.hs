@@ -1,6 +1,6 @@
-module CoderunnerGenerator.Test where
+module Generator.Test where
 
-import CoderunnerGenerator.ParseResult as PR
+import Generator.ParseResult as PR
 
 simpleParseResultWithoutConstraints :: Either String ParseResult
 simpleParseResultWithoutConstraints = do

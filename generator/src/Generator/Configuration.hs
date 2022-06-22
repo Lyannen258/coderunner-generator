@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module CoderunnerGenerator.Configuration
+module Generator.Configuration
   ( Configuration,
     ParameterName,
     empty,
@@ -15,7 +15,7 @@ module CoderunnerGenerator.Configuration
   )
 where
 
-import CoderunnerGenerator.Helper (maybeToEither)
+import Generator.Helper (maybeToEither)
 import Data.Foldable (find)
 import Data.List (intercalate)
 import Lens.Micro ((^.))

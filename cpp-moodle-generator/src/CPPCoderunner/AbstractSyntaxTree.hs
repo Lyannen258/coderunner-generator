@@ -14,7 +14,7 @@
 module CPPCoderunner.AbstractSyntaxTree where
 
 import Lens.Micro.TH
-import CoderunnerGenerator.ParameterAST (ParameterAST)
+import Generator.ParameterAST (ParameterAST)
 
 -- * Pos type class and type
 

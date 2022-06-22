@@ -1,7 +1,7 @@
-module CoderunnerGenerator.ParameterParser (parameterParser) where
+module Generator.ParameterParser (parameterParser) where
 
-import CoderunnerGenerator.ParserUtils
-import CoderunnerGenerator.ParameterAST
+import Generator.ParserUtils
+import Generator.ParameterAST
 import Text.Megaparsec
 import Text.Megaparsec.Char
 

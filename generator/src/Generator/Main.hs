@@ -1,11 +1,11 @@
-module CoderunnerGenerator.Main (main) where
+module Generator.Main (main) where
 
-import CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount)
-import CoderunnerGenerator.Helper (printLn)
-import CoderunnerGenerator.App (App)
-import CoderunnerGenerator.Globals
-import CoderunnerGenerator.ParseResult (ParseResult)
-import CoderunnerGenerator.ToParseResult (ToParseResult (toParseResult))
+import Generator.ConfigGeneration (computeConfigurations, computeMaxAmount)
+import Generator.Helper (printLn)
+import Generator.App (App)
+import Generator.Globals
+import Generator.ParseResult (ParseResult)
+import Generator.ToParseResult (ToParseResult (toParseResult))
 import Control.Monad (foldM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)

@@ -1,10 +1,10 @@
-module CoderunnerGenerator.Interface (run) where
+module Generator.Interface (run) where
 
-import qualified CoderunnerGenerator.CmdArgs as CmdArgs
-import CoderunnerGenerator.Main (main)
-import CoderunnerGenerator.Configuration (Configuration)
-import CoderunnerGenerator.Globals (constructGlobals)
-import CoderunnerGenerator.ToParseResult
+import qualified Generator.CmdArgs as CmdArgs
+import Generator.Main (main)
+import Generator.Configuration (Configuration)
+import Generator.Globals (constructGlobals)
+import Generator.ToParseResult
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)

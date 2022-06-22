@@ -1,4 +1,4 @@
-module CoderunnerGenerator.Globals
+module Generator.Globals
   ( Globals,
     constructGlobals,
     getParser,
@@ -10,8 +10,8 @@ module CoderunnerGenerator.Globals
   )
 where
 
-import CoderunnerGenerator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations))
-import CoderunnerGenerator.Configuration
+import Generator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations))
+import Generator.Configuration
 
 data Globals r u = Globals
   { parser :: String -> Either String (r, u),

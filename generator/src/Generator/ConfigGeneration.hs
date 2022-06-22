@@ -1,11 +1,11 @@
-module CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount) where
+module Generator.ConfigGeneration (computeConfigurations, computeMaxAmount) where
 
-import CoderunnerGenerator.Helper (maybeToEither, printLn, singleton)
-import CoderunnerGenerator.App
-import CoderunnerGenerator.Configuration as C
-import CoderunnerGenerator.Globals (getAmount)
-import CoderunnerGenerator.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
-import qualified CoderunnerGenerator.ParseResult as PR
+import Generator.Helper (maybeToEither, printLn, singleton)
+import Generator.App
+import Generator.Configuration as C
+import Generator.Globals (getAmount)
+import Generator.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
+import qualified Generator.ParseResult as PR
 import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE)

@@ -1,4 +1,4 @@
-module CoderunnerGenerator.CmdArgs where
+module Generator.CmdArgs where
 
 import Options.Applicative
 

@@ -1,9 +1,9 @@
 module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 
 import CPPCoderunner.AbstractSyntaxTree
-import CoderunnerGenerator.ParameterParser
-import CoderunnerGenerator.ParserUtils
-import CoderunnerGenerator.ParameterAST (ParameterAST)
+import Generator.ParameterParser
+import Generator.ParserUtils
+import Generator.ParameterAST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char

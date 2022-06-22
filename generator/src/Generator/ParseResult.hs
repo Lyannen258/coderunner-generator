@@ -1,4 +1,4 @@
-module CoderunnerGenerator.ParseResult
+module Generator.ParseResult
   ( ParseResult,
     Constraint,
     ParameterName,
@@ -29,8 +29,8 @@ module CoderunnerGenerator.ParseResult
   )
 where
 
-import CoderunnerGenerator.Helper (maybeToEither)
-import qualified CoderunnerGenerator.ParameterAST as AST 
+import Generator.Helper (maybeToEither)
+import qualified Generator.ParameterAST as AST 
 import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (nub)
 import Data.Sequence (Seq)

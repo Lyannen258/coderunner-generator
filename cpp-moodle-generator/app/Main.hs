@@ -1,6 +1,6 @@
 module Main where
 
-import CoderunnerGenerator.Interface
+import Generator.Interface
 import CPPCoderunner.Generator
 import CPPCoderunner.Parser
 
