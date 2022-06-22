@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module CoderunnerGenerator.Types.ParameterAST where
+module CoderunnerGenerator.ParameterAST where
 
 import Lens.Micro.TH
 

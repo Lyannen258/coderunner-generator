@@ -2,9 +2,9 @@ module CoderunnerGenerator.Interface (run) where
 
 import qualified CoderunnerGenerator.CmdArgs as CmdArgs
 import CoderunnerGenerator.Main (main)
-import CoderunnerGenerator.Types.Configuration (Configuration)
-import CoderunnerGenerator.Types.Globals (constructGlobals)
-import CoderunnerGenerator.Types.ToParseResult
+import CoderunnerGenerator.Configuration (Configuration)
+import CoderunnerGenerator.Globals (constructGlobals)
+import CoderunnerGenerator.ToParseResult
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)

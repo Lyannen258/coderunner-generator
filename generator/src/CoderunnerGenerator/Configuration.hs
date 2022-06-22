@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module CoderunnerGenerator.Types.Configuration
+module CoderunnerGenerator.Configuration
   ( Configuration,
     ParameterName,
     empty,

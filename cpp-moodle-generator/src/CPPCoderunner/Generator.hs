@@ -2,7 +2,7 @@ module CPPCoderunner.Generator (generate) where
 
 import CPPCoderunner.AbstractSyntaxTree
 import CoderunnerGenerator.Helper
-import CoderunnerGenerator.Types.Configuration
+import CoderunnerGenerator.Configuration
 import Control.Monad (foldM)
 import Data.List (foldl', intercalate, nub)
 import Lens.Micro ((^.))

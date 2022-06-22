@@ -1,8 +1,8 @@
-module CoderunnerGenerator.Types.ToParseResult where
+module CoderunnerGenerator.ToParseResult where
 
-import CoderunnerGenerator.Types.ParameterAST (ParameterAST)
-import CoderunnerGenerator.Types.ParseResult (ParseResult)
-import qualified CoderunnerGenerator.Types.ParseResult as PR
+import CoderunnerGenerator.ParameterAST (ParameterAST)
+import CoderunnerGenerator.ParseResult (ParseResult)
+import qualified CoderunnerGenerator.ParseResult as PR
 
 -- | Overloading the constructParseResult function for different
 -- return types

@@ -2,10 +2,10 @@ module CoderunnerGenerator.Main (main) where
 
 import CoderunnerGenerator.ConfigGeneration (computeConfigurations, computeMaxAmount)
 import CoderunnerGenerator.Helper (printLn)
-import CoderunnerGenerator.Types.App (App)
-import CoderunnerGenerator.Types.Globals
-import CoderunnerGenerator.Types.ParseResult (ParseResult)
-import CoderunnerGenerator.Types.ToParseResult (ToParseResult (toParseResult))
+import CoderunnerGenerator.App (App)
+import CoderunnerGenerator.Globals
+import CoderunnerGenerator.ParseResult (ParseResult)
+import CoderunnerGenerator.ToParseResult (ToParseResult (toParseResult))
 import Control.Monad (foldM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)

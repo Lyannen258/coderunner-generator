@@ -3,7 +3,7 @@ module CPPCoderunner.Parser (CPPCoderunner.Parser.parse) where
 import CPPCoderunner.AbstractSyntaxTree
 import CoderunnerGenerator.ParameterParser
 import CoderunnerGenerator.ParserUtils
-import CoderunnerGenerator.Types.ParameterAST (ParameterAST)
+import CoderunnerGenerator.ParameterAST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char

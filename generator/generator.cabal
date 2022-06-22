@@ -7,18 +7,18 @@ maintainer:         eriksson@wifa.uni-leipzig.de
 library
   exposed-modules:
       CoderunnerGenerator.Helper,
-      CoderunnerGenerator.Types.Configuration,
-      CoderunnerGenerator.Types.ParseResult,
-      CoderunnerGenerator.Types.ParameterAST,
+      CoderunnerGenerator.Configuration,
+      CoderunnerGenerator.ParseResult,
+      CoderunnerGenerator.ParameterAST,
       CoderunnerGenerator.Interface,
       CoderunnerGenerator.ParserUtils,
       CoderunnerGenerator.ParameterParser,
 
   other-modules:
-      CoderunnerGenerator.Types.ToParseResult,
+      CoderunnerGenerator.ToParseResult,
       CoderunnerGenerator.Test,
-      CoderunnerGenerator.Types.App,
-      CoderunnerGenerator.Types.Globals,
+      CoderunnerGenerator.App,
+      CoderunnerGenerator.Globals,
       CoderunnerGenerator.CmdArgs,
       CoderunnerGenerator.Main,
       CoderunnerGenerator.ConfigGeneration,

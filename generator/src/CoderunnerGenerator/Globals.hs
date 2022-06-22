@@ -1,4 +1,4 @@
-module CoderunnerGenerator.Types.Globals
+module CoderunnerGenerator.Globals
   ( Globals,
     constructGlobals,
     getParser,
@@ -11,7 +11,7 @@ module CoderunnerGenerator.Types.Globals
 where
 
 import CoderunnerGenerator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations))
-import CoderunnerGenerator.Types.Configuration
+import CoderunnerGenerator.Configuration
 
 data Globals r u = Globals
   { parser :: String -> Either String (r, u),
