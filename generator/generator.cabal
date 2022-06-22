@@ -10,7 +10,7 @@ library
       Generator.Configuration,
       Generator.ParseResult,
       Generator.ParameterAST,
-      Generator.Interface,
+      Generator,
       Generator.ParserUtils,
       Generator.ParameterParser,
 

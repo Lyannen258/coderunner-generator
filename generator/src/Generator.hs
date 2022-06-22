@@ -1,4 +1,4 @@
-module Generator.Interface (run) where
+module Generator (run) where
 
 import qualified Generator.CmdArgs as CmdArgs
 import Generator.Main (main)

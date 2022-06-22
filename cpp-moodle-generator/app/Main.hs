@@ -1,6 +1,6 @@
 module Main where
 
-import Generator.Interface
+import Generator
 import Generator.CPP.Moodle.Generator
 import Generator.CPP.Moodle.Parser
 
