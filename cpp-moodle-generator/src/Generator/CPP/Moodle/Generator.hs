@@ -7,6 +7,7 @@ import Control.Monad (foldM)
 import Data.List (foldl', intercalate, nub)
 import Lens.Micro ((^.))
 import Text.XML.Light
+import Generator.ParameterName (mkParameterName)
 
 valueNotFoundErr :: String -> String
 valueNotFoundErr p = "No value found for usage of parameter '" ++ p ++ "'"
@@ -55,7 +56,7 @@ generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCas
 
           getParamValueTuples :: String -> Either String [(String, String)]
           getParamValueTuples parameterName = do
-            multiParamValues <- maybeToEither (getMultiValue conf parameterName) shouldNotHappenErr
+            multiParamValues <- maybeToEither (getMultiValue conf (mkParameterName parameterName)) shouldNotHappenErr
             return [(parameterName, v) | v <- multiParamValues]
        in do
             paramValueTuples <- mapM getParamValueTuples multiParams
@@ -79,7 +80,7 @@ findMultiParams conf = foldr f []
   where
     f :: SectionBodyComponent -> [String] -> [String]
     f (OutputComponent (Parameter (ParameterUsage _ name _))) acc =
-      case getMultiValue conf name of
+      case getMultiValue conf (mkParameterName name) of
         Just _ -> acc ++ [name]
         Nothing -> acc
     f _ acc = acc
@@ -97,11 +98,11 @@ generateMultiSection config combs sbcs
     buildSBC _ acc (OutputComponent (TextConstant s)) = return (acc ++ s)
     buildSBC _ acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        vs <- evaluateMethod config name (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod config (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
         return $ acc ++ intercalate "\n" vs
     buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue config name of
+        value <- case getSingleValue config (mkParameterName name) of
           Just s -> return s
           Nothing -> case lookup name comb of
             Just ss -> return ss
@@ -116,13 +117,13 @@ generateSection conf = foldM f ""
     f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
     f acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        vs <- evaluateMethod conf name (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod conf (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
         return $ acc ++ intercalate "\n" vs
     f acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue conf name of
+        value <- case getSingleValue conf (mkParameterName name) of
           Just s -> return s
-          Nothing -> case getMultiValue conf name of
+          Nothing -> case getMultiValue conf (mkParameterName name) of
             Just ss -> return $ intercalate "\n" ss
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value

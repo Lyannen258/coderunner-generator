@@ -13,15 +13,18 @@ library
       Generator,
       Generator.ParserUtils,
       Generator.ParameterParser,
+      Generator.ParameterName
 
   other-modules:
       Generator.ToParseResult,
+      Generator.Configuration.Construction,
+      Generator.Configuration.Type,
+      Generator.Configuration.FromParseResult,
       Generator.Test,
       Generator.App,
       Generator.Globals,
       Generator.CmdArgs,
-      Generator.Main,
-      Generator.ConfigGeneration,
+      Generator.Main
   
   build-depends:
       base,

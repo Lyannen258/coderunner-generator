@@ -1,8 +1,9 @@
-module Generator.ConfigGeneration (computeConfigurations, computeMaxAmount) where
+module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
 import Generator.Helper (maybeToEither, printLn, singleton)
 import Generator.App
 import Generator.Configuration as C
+import Generator.Configuration.Construction as C
 import Generator.Globals (getAmount)
 import Generator.ParseResult (Constraint, ParseResult, ValuePart, isSingle)
 import qualified Generator.ParseResult as PR
@@ -15,6 +16,7 @@ import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import System.Random (RandomGen, getStdGen, uniformR)
+import Generator.ParameterName
 
 type ConfigListRaw = [[(ParameterName, Int)]]
 
@@ -108,7 +110,7 @@ generateConfiguration pr configs rand = do
     f (cr, c) x
       | contains c (fst x) = return (cr, c)
       | otherwise = case PR.getParameter pr (fst x) of
-        Nothing -> lift . except . Left $ "Parameter " ++ fst x ++ " not found."
+        Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
         Just pa -> buildParameter pr cr c pa
 
 buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u (ConfigRaw, Configuration)
@@ -178,10 +180,10 @@ evaluateParameterPart pn pr cr c =
           Nothing -> lift . throwE $ paramNotFoundErr pn
           Just (pn', _) -> do
             (_, newC) <- case PR.getParameter pr pn' of
-              Nothing -> lift . throwE $ "Parameter " ++ pn ++ " not found"
+              Nothing -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " not found"
               Just pa -> buildParameter pr cr c pa
             case getSingleValue newC pn' of
-              Nothing -> lift . throwE $ "Parameter " ++ pn ++ " cannot be resolved"
+              Nothing -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " cannot be resolved"
               Just s -> return (s, cr, newC)
 
 buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u ([String], Configuration)
@@ -200,7 +202,7 @@ buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
 
 makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> PR.ParameterName -> App r u ([String], Configuration)
 makeFinalMulti pr cr c n = case PR.getParameter pr n of
-  Nothing -> lift . throwE $ "Parameter " ++ n ++ " is used but not defined."
+  Nothing -> lift . throwE $ "Parameter " ++ unParameterName n ++ " is used but not defined."
   Just p -> do
     (_, cNew) <- buildParameter pr cr c p
     case C.getSingleValue c n of
@@ -209,8 +211,8 @@ makeFinalMulti pr cr c n = case PR.getParameter pr n of
         Just ss -> return (ss, cNew)
         Nothing -> lift . throwE $ "This error should not be happening"
 
-paramNotFoundErr :: String -> String
-paramNotFoundErr pn = "Found usage of parameter " ++ pn ++ ", but it was never defined."
+paramNotFoundErr :: ParameterName -> String
+paramNotFoundErr pn = "Found usage of parameter " ++ (unParameterName pn) ++ ", but it was never defined."
 
 incorrectUsageOfMultiParam :: String
 incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible values or is a multi parameter itself is not allowed"

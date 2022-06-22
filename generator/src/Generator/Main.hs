@@ -1,6 +1,6 @@
 module Generator.Main (main) where
 
-import Generator.ConfigGeneration (computeConfigurations, computeMaxAmount)
+import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
 import Generator.Helper (printLn)
 import Generator.App (App)
 import Generator.Globals

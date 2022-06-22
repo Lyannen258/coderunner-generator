@@ -5,9 +5,6 @@
 
 module Generator.Configuration
   ( Configuration,
-    ParameterName,
-    empty,
-    addParameter,
     getSingleValue,
     getMultiValue,
     contains,
@@ -15,67 +12,13 @@ module Generator.Configuration
   )
 where
 
-import Generator.Helper (maybeToEither)
 import Data.Foldable (find)
 import Data.List (intercalate)
+import Generator.Configuration.Type
+import Generator.Helper (maybeToEither)
+import Generator.ParameterName
 import Lens.Micro ((^.))
-import Lens.Micro.TH (makeFields)
 import Text.Read (readMaybe)
-import System.Random
-
-data Configuration = Configuration
-  { parameters :: [Parameter],
-    generalInfo :: GeneralInfo,
-    randomNumbers :: [Int]
-  }
-  deriving (Show)
-
-data Parameter = Parameter
-  { name :: ParameterName,
-    valueComponent :: ValueComponent
-  }
-  deriving (Show)
-
-data ValueComponent = Single SingleComponent | Multi MultiComponent
-  deriving (Show)
-
-data SingleComponent = SingleComponent
-  { _singleComponentSelectedValue :: String,
-    _singleComponentAllValues :: [String]
-  }
-  deriving (Show)
-
-data MultiComponent = MultiComponent
-  { _multiComponentSelectedValueRange :: [String],
-    _multiComponentAllValueRanges :: [[String]]
-  }
-  deriving (Show)
-
-type ParameterName = String
-
-data GeneralInfo = GeneralInfo
-  { taskName :: String,
-    author :: String,
-    fileName :: String,
-    outputDirectory :: String
-  }
-  deriving (Show)
-
-makeFields ''SingleComponent
-makeFields ''MultiComponent
-
-empty :: IO Configuration
-empty = do
-  Configuration [] (GeneralInfo "" "" "" "") . randoms <$> getStdGen -- TODO add real general info
-
-class ParameterValue v where
-  addParameter :: String -> v -> [v] -> Configuration -> Configuration
-
-instance ParameterValue String where
-  addParameter pn sv avs c = c {parameters = parameters c ++ [Parameter pn (Single (SingleComponent sv avs))]}
-
-instance ParameterValue [String] where
-  addParameter pn sv avs c = c {parameters = parameters c ++ [Parameter pn (Multi (MultiComponent sv avs))]}
 
 getSingleValue :: Configuration -> ParameterName -> Maybe String
 getSingleValue c pn = do
@@ -129,7 +72,10 @@ noMatchingMethodErr m args =
     ++ intercalate ", " args
 
 paramNotSetErr :: ParameterName -> String
-paramNotSetErr pn = "Could not infer a value for parameter '" ++ pn ++ "' because it was not declared."
+paramNotSetErr pn =
+  "Could not infer a value for parameter '"
+    ++ unParameterName pn
+    ++ "' because it was not declared."
 
 argumentMustBeTypeErr :: String -> String -> String -> String
 argumentMustBeTypeErr methodName argPos type' =

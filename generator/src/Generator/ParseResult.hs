@@ -37,6 +37,7 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Control.Monad (foldM)
 import Lens.Micro ((^.))
+import Generator.ParameterName
 
 -- | Main data type. Used to pass information from a specialized generator to the main generator.
 newtype ParseResult = ParseResult ParameterComposition -- maybe add Enumeration in future
@@ -50,9 +51,6 @@ data ParameterComposition = ParameterComposition
     constraints :: [Constraint]
   }
   deriving (Show)
-
--- | Simple alias for 'String'
-type ParameterName = String
 
 -- | Data type for a parameter. Contains the parameter name and a list of possible values.
 data Parameter
@@ -161,23 +159,23 @@ getAtIndexSingle :: ParseResult -> ParameterName -> Int -> Either String Value
 getAtIndexSingle pr pn i = case getAtIndex pr pn i of
   Left s -> Left s
   Right (SingleValue v) -> return v
-  Right (MultiValue _) -> Left $ pn ++ " is not a single parameter."
+  Right (MultiValue _) -> Left $ unParameterName pn ++ " is not a single parameter."
 
 getAtIndexMulti :: ParseResult -> ParameterName -> Int -> Either String (Seq Value)
 getAtIndexMulti pr pn i = case getAtIndex pr pn i of
   Left s -> Left s
   Right (MultiValue v) -> return v
-  Right (SingleValue _) -> Left $ pn ++ " is not a multi parameter."
+  Right (SingleValue _) -> Left $ unParameterName pn ++ " is not a multi parameter."
 
 -- | Get all values for a specific parameter.
 getParameterValues :: ParseResult -> ParameterName -> Either String (Seq ParameterValue)
-getParameterValues ps pm =
+getParameterValues ps pn =
   case parameter of
     Just (Parameter _ pvs) -> Right pvs
-    Nothing -> Left $ "No values for parameter " ++ pm
+    Nothing -> Left $ "No values for parameter " ++ unParameterName pn
   where
     parameter :: Maybe Parameter
-    parameter = getParameter ps pm
+    parameter = getParameter ps pn
 
 -- | Get a 'Parameter' from a 'ParseResult' by its name
 getParameter :: ParseResult -> ParameterName -> Maybe Parameter
@@ -278,14 +276,14 @@ fromParameterAST pAST = foldM f empty parameterStatements'
        in case psMain of
             AST.SingleParameterPart mainId mainPVS ->
               case psReq of
-                Nothing -> addParameter pr $ makeParam mainId (map toPRValue mainPVS)
+                Nothing -> addParameter pr $ makeParam (mkParameterName mainId) (map toPRValue mainPVS)
                 Just (AST.SingleParameterPart reqId reqPVS) ->
                   addToPR pr mainId (map toPRValue mainPVS) reqId (map toPRValue reqPVS)
                 Just (AST.MultiParameterPart reqId reqPVSS) ->
                   addToPR pr mainId (map toPRValue mainPVS) reqId (map (map toPRValue) reqPVSS)
             AST.MultiParameterPart mainId mainPVSS ->
               case psReq of
-                Nothing -> addParameter pr $ makeParam mainId (map (map toPRValue) mainPVSS)
+                Nothing -> addParameter pr $ makeParam (mkParameterName mainId) (map (map toPRValue) mainPVSS)
                 Just (AST.SingleParameterPart reqId reqPVS) ->
                   addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map toPRValue reqPVS)
                 Just (AST.MultiParameterPart reqId reqPVSS) ->
@@ -299,14 +297,14 @@ toPRValue (AST.ParameterValue pvps) =
 
 toPRValuePart :: AST.ParameterValuePart -> ValuePart
 toPRValuePart (AST.Simple s) = StringPart s
-toPRValuePart (AST.IdUsage n) = ParameterPart n
+toPRValuePart (AST.IdUsage n) = ParameterPart (mkParameterName n)
 
 addToPR :: (MakeParam v1, MakeParam v2) => ParseResult -> AST.Identifier -> [v1] -> AST.Identifier -> [v2] -> Either String ParseResult
 addToPR pr mainId mainVs reqId reqVs =
   if length mainVs == length reqVs
     then do
-      pr' <- addParameter pr $ makeParam mainId mainVs
-      pr'' <- addParameter pr' $ makeParam reqId reqVs
+      pr' <- addParameter pr $ makeParam (mkParameterName mainId) mainVs
+      pr'' <- addParameter pr' $ makeParam (mkParameterName reqId) reqVs
       let pairs = zip mainVs reqVs
       foldM f pr'' pairs
     else Left $ "Value ranges of " ++ mainId ++ " and " ++ reqId ++ " do not have the same amount of values in requires constraint."
@@ -314,5 +312,5 @@ addToPR pr mainId mainVs reqId reqVs =
     f prLocal (m, r) =
       addConstraint
         prLocal
-        (mainId, makeValue m)
-        (reqId, makeValue r)
+        (mkParameterName mainId, makeValue m)
+        (mkParameterName reqId, makeValue r)
