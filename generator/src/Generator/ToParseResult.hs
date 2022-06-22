@@ -1,6 +1,6 @@
 module Generator.ToParseResult where
 
-import Generator.ParseResult.Parser.AST (ParameterAST)
+import Generator.ParameterParser.AST (ParameterAST)
 import Generator.ParseResult (ParseResult)
 import Generator.ParseResult.FromAST (fromParameterAST)
 

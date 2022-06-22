@@ -1,9 +1,9 @@
 module Generator.CPP.Moodle.Parser (Generator.CPP.Moodle.Parser.parse) where
 
 import Generator.CPP.Moodle.AbstractSyntaxTree
-import Generator.ParseResult.Parser as PRP
+import Generator.ParameterParser as PRP
 import Generator.ParserUtils
-import Generator.ParseResult.Parser.AST (ParameterAST)
+import Generator.ParameterParser.AST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char

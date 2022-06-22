@@ -1,7 +1,7 @@
-module Generator.ParseResult.Parser (parser) where
+module Generator.ParameterParser (parser) where
 
 import Generator.ParserUtils
-import Generator.ParseResult.Parser.AST
+import Generator.ParameterParser.AST
 import Text.Megaparsec
 import Text.Megaparsec.Char
 

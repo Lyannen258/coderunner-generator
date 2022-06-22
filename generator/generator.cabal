@@ -12,8 +12,8 @@ library
       Generator,
       Generator.ParserUtils,
       Generator.ParameterName,
-      Generator.ParseResult.Parser.AST,
-      Generator.ParseResult.Parser,
+      Generator.ParameterParser.AST,
+      Generator.ParameterParser,
 
   other-modules:
       Generator.ParseResult.Type,
