@@ -9,7 +9,6 @@ import Lens.Micro.TH (makeFields)
 
 data Configuration = Configuration
   { parameters :: [Parameter],
-    generalInfo :: GeneralInfo,
     randomNumbers :: [Int]
   }
   deriving (Show)
@@ -32,14 +31,6 @@ data SingleComponent = SingleComponent
 data MultiComponent = MultiComponent
   { _multiComponentSelectedValueRange :: [String],
     _multiComponentAllValueRanges :: [[String]]
-  }
-  deriving (Show)
-
-data GeneralInfo = GeneralInfo
-  { taskName :: String,
-    author :: String,
-    fileName :: String,
-    outputDirectory :: String
   }
   deriving (Show)
 

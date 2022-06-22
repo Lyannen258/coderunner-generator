@@ -6,7 +6,7 @@ import System.Random
 
 empty :: IO Configuration
 empty = do
-  Configuration [] (GeneralInfo "" "" "" "") . randoms <$> getStdGen -- TODO add real general info
+  Configuration [] . randoms <$> getStdGen -- TODO add real general info
 
 class ParameterValue v where
   addParameter :: ParameterName -> v -> [v] -> Configuration -> Configuration
