@@ -6,7 +6,7 @@ import Generator.App (App)
 import Generator.Globals
 import Generator.ParseResult (ParseResult)
 import Generator.ToParseResult (ToParseResult (toParseResult))
-import Control.Monad (foldM_, when)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except)
@@ -65,13 +65,6 @@ readTemplateFile = do
 -- | Write single result
 writeResult :: String -> App r u ()
 writeResult = writeToFile "result.xml"
-
--- | Write results to the output files
-writeResults :: [String] -> App r u ()
-writeResults = foldM_ f 1
-  where
-    f :: Int -> String -> App r u Int
-    f acc s = writeToFile ("result" ++ show acc ++ ".xml") s >> return (acc + 1)
 
 -- | Create directory for the output files
 createOutputDirectory :: App r u ()
