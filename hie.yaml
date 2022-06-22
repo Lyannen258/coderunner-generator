@@ -1,7 +1,10 @@
 cradle:
-  cabal:
-    - path: "src"
-      component: "lib:coderunner-generator"
+  stack:
+    - path: "cpp-moodle-generator/src"
+      component: "cpp-moodle-generator:lib"
 
-    - path: "app/Main.hs"
-      component: "coderunner-generator:exe:coderunner-generator"
+    - path: "cpp-moodle-generator/app/Main.hs"
+      component: "cpp-moodle-generator:exe:cppcoderunner"
+
+    - path: "generator/src"
+      component: "generator:lib"

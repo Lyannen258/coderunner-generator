@@ -1,0 +1,45 @@
+cabal-version:      3.0
+name:               generator
+version:            0.1.0.0
+author:             Janik Eriksson
+maintainer:         eriksson@wifa.uni-leipzig.de
+
+library
+  exposed-modules:
+      CoderunnerGenerator.Helper,
+      CoderunnerGenerator.Types.Globals,
+      CoderunnerGenerator.Types.Configuration,
+      CoderunnerGenerator.Types.ParseResult,
+      CoderunnerGenerator.Types.App,
+      CoderunnerGenerator.Types.ParameterAST,
+      CoderunnerGenerator.Types.ToParseResult,
+      CoderunnerGenerator.CmdArgs,
+      CoderunnerGenerator.ConfigGeneration,
+      CoderunnerGenerator.Main,
+      CoderunnerGenerator.Test,
+      CoderunnerGenerator.Interface,
+      CoderunnerGenerator.ParameterParser,
+      CoderunnerGenerator.ParserUtils,
+  
+  build-depends:
+      base,
+      megaparsec,
+      xml,
+      containers,
+      filepath,
+      text,
+      transformers,
+      directory,
+      microlens,
+      microlens-th,
+      pretty-simple,
+      split,
+      optparse-applicative,
+      random,
+      HUnit
+
+  hs-source-dirs: src
+  default-language: Haskell2010
+  default-extensions: 
+      FlexibleInstances
+  ghc-options: -Wall
