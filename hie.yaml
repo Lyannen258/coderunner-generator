@@ -1,13 +1,13 @@
 cradle:
   stack:
-    - path: "cpp-moodle-generator/src"
-      component: "cpp-moodle-generator:lib"
-
-    - path: "cpp-moodle-generator/app/Main.hs"
-      component: "cpp-moodle-generator:exe:cpp-moodle-generator"
-
     - path: "generator/src"
       component: "generator:lib"
+
+    - path: "moodle-cpp-function/src"
+      component: "moodle-cpp-function:lib"
+
+    - path: "moodle-cpp-function/app/Main.hs"
+      component: "moodle-cpp-function:exe:moodle-cpp-function"
 
     - path: "moodle-cpp-program/src"
       component: "moodle-cpp-program:lib"

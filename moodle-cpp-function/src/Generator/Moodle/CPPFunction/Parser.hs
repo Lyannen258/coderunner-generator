@@ -1,6 +1,6 @@
-module Generator.CPP.Moodle.Parser (Generator.CPP.Moodle.Parser.parse) where
+module Generator.Moodle.CPPFunction.Parser (Generator.Moodle.CPPFunction.Parser.parse) where
 
-import Generator.CPP.Moodle.AbstractSyntaxTree
+import Generator.Moodle.CPPFunction.AbstractSyntaxTree
 import Generator.ParameterParser as PRP
 import Generator.ParserUtils
 import Generator.ParameterParser.AST (ParameterAST)

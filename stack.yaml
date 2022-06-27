@@ -29,7 +29,7 @@ resolver: lts-18.28
 #   - auto-update
 #   - wai
 packages:
-- cpp-moodle-generator
+- moodle-cpp-function
 - generator
 - moodle-cpp-program
 # Dependency packages to be pulled from upstream that are not in the resolver.

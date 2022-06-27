@@ -1,6 +1,6 @@
-module Generator.CPP.Moodle.Generator (generate) where
+module Generator.Moodle.CPPFunction.Generator (generate) where
 
-import Generator.CPP.Moodle.AbstractSyntaxTree
+import Generator.Moodle.CPPFunction.AbstractSyntaxTree
 import Generator.Helper
 import Generator.Configuration
 import Control.Monad (foldM)
