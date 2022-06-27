@@ -31,6 +31,7 @@ resolver: lts-18.28
 packages:
 - cpp-moodle-generator
 - generator
+- moodle-cpp-program
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:

@@ -8,3 +8,9 @@ cradle:
 
     - path: "generator/src"
       component: "generator:lib"
+
+    - path: "moodle-cpp-program/src"
+      component: "moodle-cpp-program:lib"
+
+    - path: "moodle-cpp-program/app/Main.hs"
+      component: "moodle-cpp-program:exe:moodle-cpp-program"

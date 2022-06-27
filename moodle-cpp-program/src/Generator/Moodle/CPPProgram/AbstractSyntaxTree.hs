@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 -- |
--- Module      : Generator.CPP.Moodle.AbstractSyntaxTree2
+-- Module      : Generator.Moodle.CPPProgram.AbstractSyntaxTree2
 -- Description : Contains the components that represent an abstract syntax tree for C++ coderunner templates.
 --
 -- Contains the components that represent an abstract syntax tree. They are correlated to the rules in grammar.ebnf
@@ -11,7 +11,7 @@
 -- The root node is 'Template'.
 --
 -- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
-module Generator.CPP.Moodle.AbstractSyntaxTree where
+module Generator.Moodle.CPPProgram.AbstractSyntaxTree where
 
 import Lens.Micro.TH
 import Generator.ParameterParser.AST (ParameterAST)
@@ -36,11 +36,11 @@ data Template = Template
   { templatePosition :: Position,
     templateNameSection :: SimpleSection,
     templateAuthorSection :: SimpleSection,
-    templateParameterSection :: ParameterSection,
+    templateParameterSection :: Maybe ParameterSection,
     templateTaskSection :: Section,
-    templateSolutionSection :: Section,
-    templatePreAllocationSection :: Section,
-    templateTestSection :: TestSection
+    templateSolutionSection :: Maybe Section,
+    templatePreAllocationSection :: Maybe Section,
+    templateTestSection :: Maybe TestSection
   }
   deriving (Show)
 
@@ -105,8 +105,8 @@ data TestSection = TestSection
 -- | Represents a test case
 data TestCase = TestCase
   { testCasePosition :: Position,
-    testCaseCode :: [SectionBodyComponent],
-    testCaseOutcome :: [SectionBodyComponent]
+    testCaseInput :: [SectionBodyComponent],
+    testCaseExpected :: [SectionBodyComponent]
   }
   deriving (Show)
 
