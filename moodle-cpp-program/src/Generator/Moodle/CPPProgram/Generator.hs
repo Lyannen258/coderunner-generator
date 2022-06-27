@@ -186,7 +186,10 @@ testNodes = map f
             (node (unqual "text") (CData CDataVerbatim i Nothing)),
           node
             (unqual "expected")
-            (node (unqual "text") (CData CDataVerbatim o Nothing))
+            (node (unqual "text") (CData CDataVerbatim o Nothing)),
+          node 
+            (unqual "display")
+            (node (unqual "text") "HIDE_IF_FAIL")
         ]
 
 moodleTemplate :: Element
