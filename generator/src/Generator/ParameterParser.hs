@@ -1,7 +1,7 @@
 module Generator.ParameterParser (parser) where
 
-import Generator.ParserUtils
 import Generator.ParameterParser.AST
+import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
 
@@ -45,26 +45,36 @@ valueRangeParser =
   openSquare *> singleValueListParser <* closingSquare
 
 valueParser :: Parser ParameterValue
-valueParser = do
+valueParser = valueParserDouble <|> valueParserSingle
+
+valueParserDouble :: Parser ParameterValue
+valueParserDouble = do
   _ <- openQuotes
-  valueParts <- some valuePartParser
+  valueParts <- some $ valuePartParser closingQuotes
   _ <- closingQuotes
   return $ ParameterValue valueParts
 
-valuePartParser :: Parser ParameterValuePart
-valuePartParser =
-  try simpleValuePartParser <|> idUsageValuePartParser
+valueParserSingle :: Parser ParameterValue
+valueParserSingle = do
+  _ <- openSingle
+  valueParts <- some $ valuePartParser closingSingle
+  _ <- closingSingle
+  return $ ParameterValue valueParts
 
-simpleValuePartParser :: Parser ParameterValuePart
-simpleValuePartParser = do
-  notFollowedBy stringEndLookAhead
+valuePartParser :: Parser Char -> Parser ParameterValuePart
+valuePartParser endParser =
+  try (simpleValuePartParser endParser) <|> idUsageValuePartParser
+
+simpleValuePartParser :: Parser Char -> Parser ParameterValuePart
+simpleValuePartParser endParser = do
+  notFollowedBy $ stringEndLookAhead endParser
   firstChar <- printChar
-  rest <- manyTill printChar stringEndLookAhead
+  rest <- manyTill printChar (stringEndLookAhead endParser)
   return $ Simple (firstChar : rest)
 
-stringEndLookAhead :: Parser ()
-stringEndLookAhead = do
-  _ <- (try . lookAhead) (fmap (: []) closingQuotes <|> openOutput)
+stringEndLookAhead :: Parser Char -> Parser ()
+stringEndLookAhead endParser = do
+  _ <- (try . lookAhead) (fmap (: []) endParser <|> openOutput)
   return ()
 
 idUsageValuePartParser :: Parser ParameterValuePart

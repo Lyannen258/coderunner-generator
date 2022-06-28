@@ -54,6 +54,12 @@ openQuotes = char '"'
 closingQuotes :: Parser Char
 closingQuotes = lexeme (char '"')
 
+openSingle :: Parser Char
+openSingle = char '\''
+
+closingSingle :: Parser Char
+closingSingle = lexeme (char '\'')
+
 -- | Exact reverse to openQuotes: Consume whitespace
 -- only on opening output, because after closing, the
 -- string (parameter value) resumes and we want to conserve
