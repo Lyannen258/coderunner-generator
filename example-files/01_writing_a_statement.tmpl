@@ -12,7 +12,7 @@ Task:
 Complete the given function so that its “result” is defined as {{ type }} and returns the {{ operation }} of the two
 parameters passed to the function by value.
 Solution:
-auto solution({{ type }} m, {{ type }} n)
+auto {{ operation }}({{ type }} m, {{ type }} n)
 {
     {{ type }} result = m {{ operator }} n;
     return result;
@@ -25,7 +25,7 @@ auto {{ operation }} ({{ type }} m, {{ type }} n)
 }
 Tests: {- This is a comment -}
 Code:
-if({{ operation }}({{ input }}) == solution({{ input }})) {
+if({{ operation }}({{ input }}) == Solution::{{ operation }}({{ input }})) {
     cout << "true";
 }
 Outcome:

@@ -204,11 +204,13 @@ moodleTemplate solution =
           "#define SEPARATOR \"#<ab@17943918#@>#\"",
           "",
           "{{ STUDENT_ANSWER }}",
-          ""
+          "",
+          "namespace Solution {"
         ]
         ++ solution
         ++ unlines
-          [ "",
+          [ "}",
+            "",
             "int main() {",
             "{% for TEST in TESTCASES %}",
             "   {",
