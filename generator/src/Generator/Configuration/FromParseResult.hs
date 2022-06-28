@@ -1,6 +1,7 @@
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
 import Control.Monad (foldM, when)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE)
 import Control.Monad.Trans.Reader (asks)
@@ -23,19 +24,24 @@ type ConfigListRaw = [[(ParameterName, Int)]]
 type ConfigRaw = [(ParameterName, Int)]
 
 computeMaxAmount :: ParseResult -> App r u Int
-computeMaxAmount pr =
-  (return . length . removeForbidden pr . allCombinations) pr
+computeMaxAmount pr = case allCombinations pr of
+  [] -> return 1
+  clr -> (return . length . removeForbidden pr) clr
 
 computeConfigurations :: ParseResult -> App r u [Configuration]
 computeConfigurations pr = do
-  let combs = allCombinations pr
-  let withoutForbidden = removeForbidden pr combs
-  amountMaybe <- asks getAmount
-  let amount = fromMaybe (length withoutForbidden) amountMaybe
-  printAttemptedAmount amount (length withoutForbidden)
-  randomNumbers <- getRandomNumbers amount (length withoutForbidden)
-  let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
-  sequence configurations
+  case allCombinations pr of
+    [] -> do
+      amount <- evaluateRequestedAmount 1
+      if amount == 1
+        then (liftIO . sequence) [C.empty] -- Generate single empty configuration, if no parameters specified
+        else return []
+    combs -> do
+      let withoutForbidden = removeForbidden pr combs
+      amount <- evaluateRequestedAmount (length withoutForbidden)
+      randomNumbers <- getRandomNumbers amount (length withoutForbidden)
+      let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
+      sequence configurations
 
 allCombinations :: ParseResult -> ConfigListRaw
 allCombinations pr =
@@ -69,6 +75,13 @@ removeForbidden pr = filter f
 
     constraintsL :: [Constraint]
     constraintsL = PR.getConstraints pr
+
+evaluateRequestedAmount :: Int -> App r u Int
+evaluateRequestedAmount maxAmount = do
+  amountMaybe <- asks getAmount
+  let amount = fromMaybe maxAmount amountMaybe
+  printAttemptedAmount amount maxAmount
+  return (min amount maxAmount)
 
 printAttemptedAmount :: Int -> Int -> App r u ()
 printAttemptedAmount requestedA maxA = do
