@@ -11,14 +11,14 @@ empty = do
 class ParameterValue v where
   addParameter :: ParameterName -> v -> [v] -> Configuration -> Configuration
 
-instance ParameterValue String where
+instance ParameterValue Value where
   addParameter pn sv avs c =
     c
       { parameters =
           parameters c ++ [Parameter pn (Single (SingleComponent sv avs))]
       }
 
-instance ParameterValue [String] where
+instance ParameterValue [Value] where
   addParameter pn sv avs c =
     c
       { parameters =

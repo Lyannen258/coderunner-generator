@@ -27,12 +27,20 @@ data ParameterValue
   | MultiValue (Seq Value)
   deriving (Show, Eq)
 
--- | Data that contains information about a value for a parameter.
-data Value
+-- | Contains information about a value
+data Value = RegularValue RegularValue | TupleValue TupleValue
+  deriving (Show, Eq)
+
+-- | Data that contains information about a regular value for a parameter.
+data RegularValue
   = -- | Constructor for a fully determined value that does not contain any other parameter.
     Final String
   | -- | Constructor for a value that contains at least one other parameter. It can be fully determined only after the value for the contained parameter was selected.
     NeedsInput [ValuePart]
+  deriving (Eq, Show)
+
+-- | Represents a tuple
+newtype TupleValue = Tuple [String]
   deriving (Eq, Show)
 
 -- | Data type that makes up the parts for a not fully determined 'Value'.

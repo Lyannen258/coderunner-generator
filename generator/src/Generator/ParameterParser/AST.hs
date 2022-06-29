@@ -49,7 +49,9 @@ data ParameterPart
 -- | Represents a Parameter Value
 --
 -- Consists of a list of parameter parts
-newtype ParameterValue = ParameterValue [ParameterValuePart]
+data ParameterValue
+  = Regular [ParameterValuePart]
+  | Tuple [[ParameterValuePart]]
   deriving (Show)
 
 -- | Represents a component of a parameter value

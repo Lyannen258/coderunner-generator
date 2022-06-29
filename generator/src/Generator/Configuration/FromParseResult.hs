@@ -12,11 +12,13 @@ import Data.Maybe (fromMaybe)
 import Generator.App
 import Generator.Configuration as C
 import Generator.Configuration.Construction as C
+import Generator.Configuration.Type
 import Generator.Globals (getAmount)
 import Generator.Helper (maybeToEither, printLn, singleton)
 import Generator.ParameterName
-import Generator.ParseResult.Info as PR
-import Generator.ParseResult.Type as PR
+import qualified Generator.ParseResult.Info as PR
+import Generator.ParseResult.Type (Constraint, ParseResult, ValuePart)
+import qualified Generator.ParseResult.Type as PR
 import System.Random (RandomGen, getStdGen, uniformR)
 
 type ConfigListRaw = [[(ParameterName, Int)]]
@@ -39,8 +41,8 @@ computeConfigurations pr = do
     combs -> do
       let withoutForbidden = removeForbidden pr combs
       amount <- evaluateRequestedAmount (length withoutForbidden)
-      randomNumbers <- getRandomNumbers amount (length withoutForbidden)
-      let configurations = map (generateConfiguration pr withoutForbidden) randomNumbers
+      randoms <- getRandomNumbers amount (length withoutForbidden)
+      let configurations = map (generateConfiguration pr withoutForbidden) randoms
       sequence configurations
 
 allCombinations :: ParseResult -> ConfigListRaw
@@ -132,7 +134,8 @@ buildParameter pr cr c p@(PR.Parameter n vs)
     if checkMultiParamUsageReqs pr p
       then do
         (vs', newC) <- buildWithMultiParamUsage pr cr c p
-        return (cr, C.addParameter n vs' [vs'] newC)
+        let vs'' = vs'
+        return (cr, C.addParameter n vs'' [vs''] newC)
       else (lift . throwE) incorrectUsageOfMultiParam
   | otherwise = do
     i <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
@@ -140,7 +143,7 @@ buildParameter pr cr c p@(PR.Parameter n vs)
     newC' <- addToConfiguration newC n (snd i) singleMultiE
     return (newCR, newC')
 
-addToConfiguration :: Configuration -> ParameterName -> Int -> [Either String [String]] -> App r u Configuration
+addToConfiguration :: Configuration -> ParameterName -> Int -> [Either Value [Value]] -> App r u Configuration
 addToConfiguration c n i singleMultiE
   | not (null ls) && null rs && i < length ls =
     return $ C.addParameter n (ls !! i) ls c
@@ -153,28 +156,29 @@ addToConfiguration c n i singleMultiE
 
 checkMultiParamUsageReqs :: ParseResult -> PR.Parameter -> Bool
 checkMultiParamUsageReqs pr (PR.Parameter n vs) =
-  isSingle pr n && length vs == 1
+  PR.isSingle pr n && length vs == 1
 
-buildParameterValue :: ParseResult -> ([Either String [String]], ConfigRaw, Configuration) -> PR.ParameterValue -> App r u ([Either String [String]], ConfigRaw, Configuration)
+buildParameterValue :: ParseResult -> ([Either Value [Value]], ConfigRaw, Configuration) -> PR.ParameterValue -> App r u ([Either Value [Value]], ConfigRaw, Configuration)
 buildParameterValue pr (l, cr, c) pv = case pv of
   PR.SingleValue va -> do
-    (v, cr', c') <- buildValue pr ("", cr, c) va
+    (v, cr', c') <- buildValue pr (cr, c) va
     return (l ++ [Left v], cr', c')
   PR.MultiValue vs -> do
     (ss, newCR, newC) <- foldM f ([], cr, c) vs
     return (l ++ [Right ss], newCR, newC)
     where
-      f :: ([String], ConfigRaw, Configuration) -> PR.Value -> App r u ([String], ConfigRaw, Configuration)
+      f :: ([Value], ConfigRaw, Configuration) -> PR.Value -> App r u ([Value], ConfigRaw, Configuration)
       f (ss, cr'', c'') v = do
-        (nextS, newCR, newC) <- buildValue pr ("", cr'', c'') v
+        (nextS, newCR, newC) <- buildValue pr (cr'', c'') v
         return (ss ++ [nextS], newCR, newC)
 
-buildValue :: ParseResult -> (String, ConfigRaw, Configuration) -> PR.Value -> App r u (String, ConfigRaw, Configuration)
-buildValue pr (s, cr, c) v = case v of
-  PR.Final str -> return (s ++ str, cr, c)
-  PR.NeedsInput vps -> do
+buildValue :: ParseResult -> (ConfigRaw, Configuration) -> PR.Value -> App r u (Value, ConfigRaw, Configuration)
+buildValue pr (cr, c) v = case v of
+  (PR.RegularValue (PR.Final str)) -> return (Regular str, cr, c)
+  (PR.RegularValue (PR.NeedsInput vps)) -> do
     (value, cr', c') <- foldM (makeFinal pr) ("", cr, c) vps
-    return (value, cr', c')
+    return (Regular value, cr', c')
+  (PR.TupleValue (PR.Tuple strs)) -> return (Tuple strs, cr, c)
 
 makeFinal :: ParseResult -> (String, ConfigRaw, Configuration) -> ValuePart -> App r u (String, ConfigRaw, Configuration)
 makeFinal pr (stringBuilder, cr, c) vp = case vp of
@@ -196,18 +200,20 @@ evaluateParameterPart pn pr cr c =
               Nothing -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " not found"
               Just pa -> buildParameter pr cr c pa
             case getSingleValue newC pn' of
-              Nothing -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " cannot be resolved"
               Just s -> return (s, cr, newC)
+              _ -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " cannot be resolved"
 
-buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u ([String], Configuration)
+buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u ([Value], Configuration)
 buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
-  PR.SingleValue (PR.NeedsInput vps) -> foldM f ([], c) vps
+  PR.SingleValue (PR.RegularValue (PR.NeedsInput vps)) -> do
+    (strs, newC) <- foldM f ([], c) vps
+    return (map Regular strs, newC)
   _ -> lift . throwE $ "This error should not be happening"
   where
     f :: ([String], Configuration) -> ValuePart -> App r u ([String], Configuration)
-    f (strs, c') (PR.StringPart s) = case strs of
+    f (vs', c') (PR.StringPart s) = case vs' of
       [] -> return ([s], c)
-      _ -> return (map (++ s) strs, c')
+      _ -> return (map (++ s) vs', c')
     f (strs, c') (PR.ParameterPart pn) =
       do
         (paramValues, newC) <- makeFinalMulti pr cr c' pn
@@ -215,17 +221,20 @@ buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
 
 makeFinalMulti :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> App r u ([String], Configuration)
 makeFinalMulti pr cr c n = case PR.getParameter pr n of
-  Nothing -> lift . throwE $ "Parameter " ++ unParameterName n ++ " is used but not defined."
+  Nothing -> lift . throwE $ paramNotFoundErr n
   Just p -> do
     (_, cNew) <- buildParameter pr cr c p
     case C.getSingleValue c n of
-      Just s -> return ([s], cNew)
+      Just v -> return ([v], cNew)
       Nothing -> case C.getMultiValue c n of
-        Just ss -> return (ss, cNew)
+        Just vs -> return (foldr (:) [] vs, cNew)
         Nothing -> lift . throwE $ "This error should not be happening"
 
 paramNotFoundErr :: ParameterName -> String
 paramNotFoundErr pn = "Found usage of parameter " ++ unParameterName pn ++ ", but it was never defined."
 
 incorrectUsageOfMultiParam :: String
-incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible values or is a multi parameter itself is not allowed"
+incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible value or is a multi parameter itself is not allowed"
+
+paramIsTupleErr :: ParameterName -> String
+paramIsTupleErr pn = "Found usage of tuple-parameter " ++ unParameterName pn ++ " in the value range of another parameter. This is not allowed."

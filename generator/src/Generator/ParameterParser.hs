@@ -1,9 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
 module Generator.ParameterParser (parser) where
 
 import Generator.ParameterParser.AST
 import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import Data.Maybe (catMaybes)
 
 -- * Main parsers
 
@@ -45,21 +47,34 @@ valueRangeParser =
   openSquare *> singleValueListParser <* closingSquare
 
 valueParser :: Parser ParameterValue
-valueParser = valueParserDouble <|> valueParserSingle
+valueParser = regularValueParser <|> tupleValueParser
+
+regularValueParser :: Parser ParameterValue
+regularValueParser = valueParserDouble <|> valueParserSingle
 
 valueParserDouble :: Parser ParameterValue
 valueParserDouble = do
   _ <- openQuotes
   valueParts <- some $ valuePartParser closingQuotes
   _ <- closingQuotes
-  return $ ParameterValue valueParts
+  return $ Regular valueParts
 
 valueParserSingle :: Parser ParameterValue
 valueParserSingle = do
   _ <- openSingle
   valueParts <- some $ valuePartParser closingSingle
   _ <- closingSingle
-  return $ ParameterValue valueParts
+  return $ Regular valueParts
+
+tupleValueParser :: Parser ParameterValue
+tupleValueParser = do
+  _ <- openParenth
+  regularValues <- singleValueListParser
+  _ <- closingParenth
+  let valueParts = map (\case
+        Regular pvps -> Just pvps
+        Tuple _ -> Nothing) regularValues
+  return $ Tuple (catMaybes valueParts)
 
 valuePartParser :: Parser Char -> Parser ParameterValuePart
 valuePartParser endParser =

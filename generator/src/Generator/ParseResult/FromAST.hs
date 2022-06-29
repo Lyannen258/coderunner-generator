@@ -1,12 +1,12 @@
 module Generator.ParseResult.FromAST where
 
+import Control.Monad (foldM)
+import Data.Foldable (Foldable (foldl'))
+import Generator.ParameterName
 import Generator.ParameterParser.AST as AST
 import Generator.ParseResult
-import Generator.ParseResult.Type
-import Generator.ParameterName
-import Control.Monad (foldM)
+import Generator.ParseResult.Type as PR
 import Lens.Micro ((^.))
-import Data.Foldable (Foldable(foldl'))
 
 -- | Constructs a parseResult from a ParameterAST
 fromParameterAST :: AST.ParameterAST -> Either String ParseResult
@@ -22,24 +22,48 @@ fromParameterAST pAST = foldM f empty parameterStatements'
        in case psMain of
             AST.SingleParameterPart mainId mainPVS ->
               case psReq of
-                Nothing -> addParameter pr $ makeParam (mkParameterName mainId) (map toPRValue mainPVS)
-                Just (AST.SingleParameterPart reqId reqPVS) ->
-                  addToPR pr mainId (map toPRValue mainPVS) reqId (map toPRValue reqPVS)
+                Nothing -> addParameter pr . makeParam (mkParameterName mainId) =<< mapM toPRValue mainPVS
+                Just (AST.SingleParameterPart reqId reqPVS) -> do
+                  v1s <- mapM toPRValue mainPVS
+                  v2s <- mapM toPRValue reqPVS
+                  addToPR pr mainId v1s reqId v2s
                 Just (AST.MultiParameterPart reqId reqPVSS) ->
-                  addToPR pr mainId (map toPRValue mainPVS) reqId (map (map toPRValue) reqPVSS)
+                  do
+                    v1s <- mapM toPRValue mainPVS
+                    v2s <- mapM (mapM toPRValue) reqPVSS
+                    addToPR pr mainId v1s reqId v2s
             AST.MultiParameterPart mainId mainPVSS ->
               case psReq of
-                Nothing -> addParameter pr $ makeParam (mkParameterName mainId) (map (map toPRValue) mainPVSS)
+                Nothing -> addParameter pr . makeParam (mkParameterName mainId) =<< mapM (mapM toPRValue) mainPVSS
                 Just (AST.SingleParameterPart reqId reqPVS) ->
-                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map toPRValue reqPVS)
+                  do
+                    v1s <- mapM (mapM toPRValue) mainPVSS
+                    v2s <- mapM toPRValue reqPVS
+                    addToPR pr mainId v1s reqId v2s
                 Just (AST.MultiParameterPart reqId reqPVSS) ->
-                  addToPR pr mainId (map (map toPRValue) mainPVSS) reqId (map (map toPRValue) reqPVSS)
+                  do
+                    v1s <- mapM (mapM toPRValue) mainPVSS
+                    v2s <- mapM (mapM toPRValue) reqPVSS
+                    addToPR pr mainId v1s reqId v2s
 
-toPRValue :: AST.ParameterValue -> Value
-toPRValue (AST.ParameterValue pvps) =
+toPRValue :: AST.ParameterValue -> Either String Value
+toPRValue (AST.Regular pvps) = return $ RegularValue $ pvpsToPRValue pvps
+toPRValue (AST.Tuple pvpss) =
+  TupleValue . PR.Tuple <$> mapM pvpsToPRTupleValue pvpss
+
+pvpsToPRValue :: [AST.ParameterValuePart] -> RegularValue
+pvpsToPRValue pvps =
   if any AST.isIdUsage pvps
     then NeedsInput (map toPRValuePart pvps)
     else Final (foldl' (\acc (AST.Simple s) -> acc ++ s) "" pvps)
+
+pvpsToPRTupleValue :: [AST.ParameterValuePart] -> Either String String
+pvpsToPRTupleValue pvps
+  | any AST.isIdUsage pvps = Left "Using variables inside of tuples is not allowed."
+  | otherwise = return $ foldl' f "" pvps
+  where
+    f b (Simple s) = b ++ s
+    f b _ = b
 
 toPRValuePart :: AST.ParameterValuePart -> ValuePart
 toPRValuePart (AST.Simple s) = StringPart s

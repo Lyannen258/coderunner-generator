@@ -26,6 +26,8 @@ import Generator.ParseResult.Type
     ParseResult (..),
     Value (..),
     ValuePart (..),
+    RegularValue (..),
+    TupleValue (..)
   )
 
 findValueIndex :: ParseResult -> ParameterName -> ParameterValue -> Maybe Int
@@ -98,8 +100,12 @@ containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
 containsMultiParamUsage pr n = any f $ getAllValues pr n
   where
     f :: Value -> Bool
-    f (Final _) = False
-    f (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs
+    f (RegularValue rv) = f' rv
+    f (TupleValue (Tuple _)) = False
+
+    f' :: RegularValue -> Bool
+    f' (Final _) = False
+    f' (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs
 
 valuePartContainsMultiParamUsage :: ParseResult -> ValuePart -> Bool
 valuePartContainsMultiParamUsage _ (StringPart _) = False

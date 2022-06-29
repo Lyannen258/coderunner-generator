@@ -23,15 +23,18 @@ data ValueComponent = Single SingleComponent | Multi MultiComponent
   deriving (Show)
 
 data SingleComponent = SingleComponent
-  { _singleComponentSelectedValue :: String,
-    _singleComponentAllValues :: [String]
+  { _singleComponentSelectedValue :: Value,
+    _singleComponentAllValues :: [Value]
   }
   deriving (Show)
 
 data MultiComponent = MultiComponent
-  { _multiComponentSelectedValueRange :: [String],
-    _multiComponentAllValueRanges :: [[String]]
+  { _multiComponentSelectedValueRange :: [Value],
+    _multiComponentAllValueRanges :: [[Value]]
   }
+  deriving (Show)
+
+data Value = Regular String | Tuple [String]
   deriving (Show)
 
 makeFields ''SingleComponent
