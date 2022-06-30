@@ -235,6 +235,3 @@ paramNotFoundErr pn = "Found usage of parameter " ++ unParameterName pn ++ ", bu
 
 incorrectUsageOfMultiParam :: String
 incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible value or is a multi parameter itself is not allowed"
-
-paramIsTupleErr :: ParameterName -> String
-paramIsTupleErr pn = "Found usage of tuple-parameter " ++ unParameterName pn ++ " in the value range of another parameter. This is not allowed."
