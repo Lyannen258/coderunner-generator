@@ -79,7 +79,7 @@ findMultiParams :: Configuration -> [SectionBodyComponent] -> [String]
 findMultiParams conf = foldr f []
   where
     f :: SectionBodyComponent -> [String] -> [String]
-    f (OutputComponent (Parameter (ParameterUsage _ name _))) acc =
+    f (OutputComponent (Output p (Parameter (ParameterUsage name _)))) acc =
       case getMultiValue conf (mkParameterName name) of
         Just _ -> acc ++ [name]
         Nothing -> acc
@@ -95,12 +95,12 @@ generateMultiSection config combs sbcs
 
     buildSBC :: [(String, String)] -> String -> SectionBodyComponent -> Either String String
     buildSBC _ acc (TextComponent s) = return (acc ++ s)
-    buildSBC _ acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    buildSBC _ acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
+    buildSBC _ acc (OutputComponent (Output p (TextConstant s))) = return (acc ++ s)
+    buildSBC _ acc (OutputComponent (Output p (Parameter (ParameterUsage name (Just cp))))) =
       do
         vs <- evaluateMethod config (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
-        return $ acc ++ intercalate "\n" vs
-    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
+        return $ acc ++ intercalate ('\n' : replicate (p ^. column - 1) ' ') vs
+    buildSBC comb acc (OutputComponent (Output p (Parameter (ParameterUsage name Nothing)))) =
       do
         value <- case getSingleValue config (mkParameterName name) of
           Just s -> return s
@@ -116,17 +116,17 @@ generateSection conf maybeSBC = case maybeSBC of
   where
     f :: String -> SectionBodyComponent -> Either String String
     f acc (TextComponent s) = return (acc ++ s)
-    f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    f acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
+    f acc (OutputComponent (Output p (TextConstant s))) = return (acc ++ s)
+    f acc (OutputComponent (Output p (Parameter (ParameterUsage name (Just cp))))) =
       do
         vs <- evaluateMethod conf (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
-        return $ acc ++ intercalate "\n" vs
-    f acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
+        return $ acc ++ intercalate ('\n' : replicate (p ^. column - 1) ' ') vs
+    f acc (OutputComponent (Output p (Parameter (ParameterUsage name Nothing)))) =
       do
         value <- case getSingleValue conf (mkParameterName name) of
           Just s -> return s
           Nothing -> case getMultiValue conf (mkParameterName name) of
-            Just ss -> return $ intercalate "\n" ss
+            Just ss -> return $ intercalate ('\n' : replicate (p ^. column - 1) ' ') ss
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 

@@ -144,20 +144,22 @@ outcomeHeadlineParser = headlineParser "Outcome"
 -- * Output / Parameter Usage
 
 outputParser :: Parser Output
-outputParser =
-  openOutput
-    *> (stringOutputParser <|> parameterUsageParser)
-    <* closingOutput
+outputParser = do
+  sp <- getSourcePos
+  _ <- openOutput
+  output <- stringOutputParser <|> parameterUsageParser
+  _ <- closingOutput
+  return $ Output (Position (unPos . sourceLine $ sp) (unPos . sourceColumn $ sp)) output
 
-stringOutputParser :: Parser Output
+stringOutputParser :: Parser OutputInner
 stringOutputParser =
   TextConstant <$> (openQuotes *> someTill printChar ((try . lookAhead) closingQuotes) <* closingQuotes)
 
-parameterUsageParser :: Parser Output
+parameterUsageParser :: Parser OutputInner
 parameterUsageParser = do
   i <- identifierParser
   cp <- (optional . try) callPartParser
-  return $ Parameter $ ParameterUsage placeholder i cp
+  return $ Parameter $ ParameterUsage i cp
 
 callPartParser :: Parser CallPart
 callPartParser = do

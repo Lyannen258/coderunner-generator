@@ -13,21 +13,19 @@
 -- This module makes use of the microlens package and the module 'Lens.Micro.TH' to generate lenses. To use makeFields, all record accessor functions must be prefixed with the class name. See the documentation on hackage for further information.
 module Generator.Moodle.CPPProgram.AbstractSyntaxTree where
 
-import Lens.Micro.TH
 import Generator.ParameterParser.AST (ParameterAST)
+import Lens.Micro.TH
 
 -- * Pos type class and type
 
 data Position = Position
-  { _lineStart :: Int,
-    _lineEnd :: Int,
-    _colStart :: Int,
-    _colEnd :: Int
+  { _line :: Int,
+    _column :: Int
   }
   deriving (Show)
 
 placeholder :: Position -- TO BE REMOVED
-placeholder = Position 0 0 0 0
+placeholder = Position  0  0
 
 -- * AST components
 
@@ -58,15 +56,21 @@ type Identifier = String
 -- ** Output
 
 -- | Represents an output using double curly brackets
-data Output
+data Output = Output
+  { outputPosition :: Position,
+    outputInner :: OutputInner
+  }
+  deriving (Show)
+
+-- | Decides between parameter usage and text constant
+data OutputInner
   = Parameter ParameterUsage
   | TextConstant String
   deriving (Show)
 
 -- | Represents the usage of a parameter
 data ParameterUsage = ParameterUsage
-  { parameterUsagePosition :: Position,
-    parameterUsageIdentifier :: Identifier,
+  { parameterUsageIdentifier :: Identifier,
     parameterUsageCallPart :: Maybe CallPart
   }
   deriving (Show)
