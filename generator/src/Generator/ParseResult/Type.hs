@@ -50,6 +50,8 @@ data ValuePart
   | -- | Constructor for a con-constant part (the usage of a parameter that will
     -- be replaced by the value once it is determined), e.g. in @{{type}}myfunc();@ this would be "type"
     ParameterPart ParameterName
+  | -- | Constructor for a non-constant part, where the get-function was used on a tuple
+    TupleSelect ParameterName Int
   deriving (Eq, Show)
 
 -- | Data type for a constraint between 2 parameter values. The values are identified by their index.

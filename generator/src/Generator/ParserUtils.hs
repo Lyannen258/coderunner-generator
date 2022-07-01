@@ -30,7 +30,7 @@ requiresParser :: Parser String
 requiresParser = lexeme (string "requires")
 
 identifierParser :: Parser String
-identifierParser = lexeme (some letterChar)
+identifierParser = lexeme (some (letterChar <|> char '-' <|> char '_'))
 
 parameterHeadlineParser :: Parser String
 parameterHeadlineParser = hlexeme (string "Parameter:" <* eol)

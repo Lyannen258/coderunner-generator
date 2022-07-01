@@ -68,6 +68,7 @@ pvpsToPRTupleValue pvps
 toPRValuePart :: AST.ParameterValuePart -> ValuePart
 toPRValuePart (AST.Simple s) = StringPart s
 toPRValuePart (AST.IdUsage n) = ParameterPart (mkParameterName n)
+toPRValuePart (AST.TupleSelect i int) = PR.TupleSelect (mkParameterName i) int
 
 addToPR :: (MakeParam v1, MakeParam v2) => ParseResult -> AST.Identifier -> [v1] -> AST.Identifier -> [v2] -> Either String ParseResult
 addToPR pr mainId mainVs reqId reqVs =

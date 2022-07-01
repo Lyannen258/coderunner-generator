@@ -57,12 +57,12 @@ data ParameterValue
 -- | Represents a component of a parameter value
 --
 -- Possible components are simple strings and usages of identifiers
-data ParameterValuePart = Simple String | IdUsage Identifier
+data ParameterValuePart = Simple String | IdUsage Identifier | TupleSelect Identifier Int
   deriving (Show, Eq, Ord)
 
 isIdUsage :: ParameterValuePart -> Bool
-isIdUsage (Simple _) = False
 isIdUsage (IdUsage _) = True
+isIdUsage _ = False
 
 type Identifier = String
 

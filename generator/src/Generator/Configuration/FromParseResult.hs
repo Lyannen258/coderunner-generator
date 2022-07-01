@@ -1,5 +1,6 @@
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
+import Control.Exception (throw)
 import Control.Monad (foldM, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -9,9 +10,11 @@ import Data.Either (lefts, rights)
 import Data.Foldable (Foldable (toList), find, foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
+import Debug.Pretty.Simple (pTraceShowId)
 import Generator.App
 import Generator.Configuration as C
 import Generator.Configuration.Construction as C
+import Generator.Configuration.Internal as C
 import Generator.Configuration.Type
 import Generator.Globals (getAmount)
 import Generator.Helper (maybeToEither, printLn, singleton)
@@ -117,31 +120,30 @@ getNDistinct amountNumbers amountConfigs = fillToN []
 generateConfiguration :: ParseResult -> ConfigListRaw -> Int -> App r u Configuration
 generateConfiguration pr configs rand = do
   emptyC <- (lift . lift) empty
-  snd <$> foldM f (configRaw, emptyC) configRaw
+  foldM f emptyC configRaw
   where
     configRaw = configs !! rand
 
-    f :: (ConfigRaw, Configuration) -> (ParameterName, Int) -> App r u (ConfigRaw, Configuration)
-    f (cr, c) x
-      | contains c (fst x) = return (cr, c)
+    f :: Configuration -> (ParameterName, Int) -> App r u Configuration
+    f c x
+      | contains c (fst x) = return c
       | otherwise = case PR.getParameter pr (fst x) of
         Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
-        Just pa -> buildParameter pr cr c pa
+        Just pa -> buildParameter pr configRaw c pa
 
-buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u (ConfigRaw, Configuration)
+buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u Configuration
 buildParameter pr cr c p@(PR.Parameter n vs)
   | PR.containsMultiParamUsage pr n =
     if checkMultiParamUsageReqs pr p
       then do
         (vs', newC) <- buildWithMultiParamUsage pr cr c p
         let vs'' = vs'
-        return (cr, C.addParameter n vs'' [vs''] newC)
+        return $ C.addParameter n vs'' [vs''] newC
       else (lift . throwE) incorrectUsageOfMultiParam
   | otherwise = do
     i <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
     (singleMultiE, newCR, newC) <- foldM (buildParameterValue pr) ([], cr, c) vs
-    newC' <- addToConfiguration newC n (snd i) singleMultiE
-    return (newCR, newC')
+    addToConfiguration newC n (snd i) singleMultiE
 
 addToConfiguration :: Configuration -> ParameterName -> Int -> [Either Value [Value]] -> App r u Configuration
 addToConfiguration c n i singleMultiE
@@ -158,11 +160,11 @@ checkMultiParamUsageReqs :: ParseResult -> PR.Parameter -> Bool
 checkMultiParamUsageReqs pr (PR.Parameter n vs) =
   PR.isSingle pr n && length vs == 1
 
-buildParameterValue :: ParseResult -> ([Either Value [Value]], ConfigRaw, Configuration) -> PR.ParameterValue -> App r u ([Either Value [Value]], ConfigRaw, Configuration)
+buildParameterValue :: ParseResult -> ([Either Value [Value]], ConfigRaw, Configuration) -> PR.ParameterValue -> App r u (Value, Configuration)
 buildParameterValue pr (l, cr, c) pv = case pv of
   PR.SingleValue va -> do
     (v, cr', c') <- buildValue pr (cr, c) va
-    return (l ++ [Left v], cr', c')
+    return c'
   PR.MultiValue vs -> do
     (ss, newCR, newC) <- foldM f ([], cr, c) vs
     return (l ++ [Right ss], newCR, newC)
@@ -172,20 +174,49 @@ buildParameterValue pr (l, cr, c) pv = case pv of
         (nextS, newCR, newC) <- buildValue pr (cr'', c'') v
         return (ss ++ [nextS], newCR, newC)
 
-buildValue :: ParseResult -> (ConfigRaw, Configuration) -> PR.Value -> App r u (Value, ConfigRaw, Configuration)
+buildValue :: ParseResult -> (ConfigRaw, Configuration) -> PR.Value -> App r u (Value, Configuration)
 buildValue pr (cr, c) v = case v of
-  (PR.RegularValue (PR.Final str)) -> return (Regular str, cr, c)
+  (PR.RegularValue (PR.Final str)) -> return (Regular str, c)
   (PR.RegularValue (PR.NeedsInput vps)) -> do
-    (value, cr', c') <- foldM (makeFinal pr) ("", cr, c) vps
-    return (Regular value, cr', c')
-  (PR.TupleValue (PR.Tuple strs)) -> return (Tuple strs, cr, c)
+    (value, c') <- foldM (makeFinal pr) ("", cr, c) vps
+    return (Regular value, c')
+  (PR.TupleValue (PR.Tuple strs)) -> return (Tuple strs, c)
 
-makeFinal :: ParseResult -> (String, ConfigRaw, Configuration) -> ValuePart -> App r u (String, ConfigRaw, Configuration)
+makeFinal :: ParseResult -> (String, ConfigRaw, Configuration) -> ValuePart -> App r u (String, Configuration)
 makeFinal pr (stringBuilder, cr, c) vp = case vp of
   PR.StringPart str -> return (stringBuilder ++ str, cr, c)
   PR.ParameterPart pn -> do
     (s, newCR, newC) <- evaluateParameterPart pn pr cr c
     return (stringBuilder ++ s, newCR, newC)
+  PR.TupleSelect pn arg -> do
+    (s, newC) <- evaluateTuplePart pn arg pr cr c
+    return
+
+evaluateTuplePart :: ParameterName -> Int -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, Configuration)
+evaluateTuplePart pn i pr cr conf =
+  if contains conf pn
+    then f conf
+    else case find (\x -> fst x == pn) cr of
+      Nothing -> lift . throwE $ paramNotFoundErr pn
+      Just (pn', _) -> do
+        (_, newC) <- case PR.getParameter pr pn' of
+          Nothing -> lift . throwE $ paramNotFoundErr pn
+          Just pa -> buildParameter pr cr c pa
+        f newC
+  where
+    f conf' = case getTupleValueSingle conf' pn of
+      Nothing -> throw $ "Tried to call 'get' on parameter '" ++ show pn ++ "', but it is not a tuple parameter"
+      Just ss ->
+        if i < length ss
+          then return (ss !! i, conf')
+          else throw $ "Tried to get value " ++ show i ++ " of parameter '" ++ show pn ++ "', but it has only " ++ show (length ss)
+
+getTupleValueSingle :: Configuration -> ParameterName -> Maybe [String]
+getTupleValueSingle conf pn = do
+  vc <- getValueComponent conf pn
+  case vc of
+    Single (SingleComponent (Tuple ss) _) -> Just ss
+    _ -> Nothing
 
 evaluateParameterPart :: ParameterName -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, ConfigRaw, Configuration)
 evaluateParameterPart pn pr cr c =
@@ -197,21 +228,21 @@ evaluateParameterPart pn pr cr c =
           Nothing -> lift . throwE $ paramNotFoundErr pn
           Just (pn', _) -> do
             (_, newC) <- case PR.getParameter pr pn' of
-              Nothing -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " not found"
+              Nothing -> lift . throwE $ paramNotFoundErr pn
               Just pa -> buildParameter pr cr c pa
             case getSingleValue newC pn' of
               Just s -> return (s, cr, newC)
               _ -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " cannot be resolved"
 
 buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u ([Value], Configuration)
-buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case head $ toList vs of
+buildWithMultiParamUsage pr cr c (PR.Parameter _ vs) = case pTraceShowId $ head $ toList vs of
   PR.SingleValue (PR.RegularValue (PR.NeedsInput vps)) -> do
     (strs, newC) <- foldM f ([], c) vps
     return (map Regular strs, newC)
   _ -> lift . throwE $ "This error should not be happening"
   where
     f :: ([String], Configuration) -> ValuePart -> App r u ([String], Configuration)
-    f (vs', c') (PR.StringPart s) = case vs' of
+    f (strs, c') (PR.StringPart s) = case vs' of
       [] -> return ([s], c)
       _ -> return (map (++ s) vs', c')
     f (strs, c') (PR.ParameterPart pn) =
@@ -228,7 +259,7 @@ makeFinalMulti pr cr c n = case PR.getParameter pr n of
       Just v -> return ([v], cNew)
       Nothing -> case C.getMultiValue c n of
         Just vs -> return (foldr (:) [] vs, cNew)
-        Nothing -> lift . throwE $ "This error should not be happening"
+        Nothing -> lift . throwE $ tupleInsideAnotherValue
 
 paramNotFoundErr :: ParameterName -> String
 paramNotFoundErr pn = "Found usage of parameter " ++ unParameterName pn ++ ", but it was never defined."

@@ -23,6 +23,7 @@ library
       Generator.Configuration.Construction,
       Generator.Configuration.Type,
       Generator.Configuration.FromParseResult,
+      Generator.Configuration.Internal,
       Generator.Test,
       Generator.App,
       Generator.Globals,

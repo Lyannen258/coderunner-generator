@@ -37,5 +37,9 @@ data MultiComponent = MultiComponent
 data Value = Regular String | Tuple [String]
   deriving (Show)
 
+tupleInsideAnotherValue :: String
+tupleInsideAnotherValue =
+  "Found a tuple-parameter inside of the value range of another parameter."
+
 makeFields ''SingleComponent
 makeFields ''MultiComponent

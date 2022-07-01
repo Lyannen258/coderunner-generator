@@ -6,6 +6,7 @@ import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Data.Maybe (catMaybes)
+import Text.Read (readMaybe)
 
 -- * Main parsers
 
@@ -78,7 +79,7 @@ tupleValueParser = do
 
 valuePartParser :: Parser Char -> Parser ParameterValuePart
 valuePartParser endParser =
-  try (simpleValuePartParser endParser) <|> idUsageValuePartParser
+  try (simpleValuePartParser endParser) <|> idUsageOrTupleSelectValuePartParser
 
 simpleValuePartParser :: Parser Char -> Parser ParameterValuePart
 simpleValuePartParser endParser = do
@@ -92,9 +93,25 @@ stringEndLookAhead endParser = do
   _ <- (try . lookAhead) (fmap (: []) endParser <|> openOutput)
   return ()
 
+idUsageOrTupleSelectValuePartParser :: Parser ParameterValuePart
+idUsageOrTupleSelectValuePartParser = do
+  _ <- openOutput
+  pvp <- try tupleSelectValuePartParser <|> idUsageValuePartParser 
+  _ <- closingOutput
+  return pvp
+
 idUsageValuePartParser :: Parser ParameterValuePart
 idUsageValuePartParser = do
-  _ <- openOutput
+  IdUsage <$> identifierParser
+
+tupleSelectValuePartParser :: Parser ParameterValuePart
+tupleSelectValuePartParser = do
   i <- identifierParser
-  _ <- closingOutput
-  return $ IdUsage i
+  _ <- point
+  _ <- string "get"
+  _ <- openParenth
+  n <- hlexeme $ some numberChar
+  _ <- closingParenth
+  case readMaybe n of
+    Nothing -> fail "Tried to use a non-int argument in 'get'"
+    Just int -> return $ TupleSelect i int
