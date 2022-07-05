@@ -1,20 +1,16 @@
 module Generator.ParseResult
   ( ParseResult,
-    ParameterValue,
     Parameter,
-    makeParam,
-    makeValue,
-    addParameter,
     addConstraint,
+    addParameter,
     empty,
-    MakeParam,
+    makeParam,
+    makeRange
   )
 where
 
-import Data.Foldable (Foldable (toList), foldl')
+import Data.Foldable (foldl')
 import Data.List (nub)
-import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
 import Generator.Helper (maybeToEither)
 import Generator.ParameterName
 import Generator.ParseResult.Info
@@ -24,27 +20,14 @@ import Generator.ParseResult.Type
 empty :: ParseResult
 empty = ParseResult $ ParameterComposition [] []
 
--- Construct a 'Parameter' with different types of values
-class MakeParam v where
-  makeValue :: v -> ParameterValue
-  makeParam :: ParameterName -> [v] -> Parameter
-
-instance MakeParam Value where
-  makeParam pn vs = Parameter pn $ Seq.fromList (map SingleValue vs)
-  makeValue = SingleValue
-
-instance MakeParam [Value] where
-  makeParam pn vs = Parameter pn $ Seq.fromList (map (MultiValue . Seq.fromList) vs)
-  makeValue = MultiValue . Seq.fromList
-
 -- | Add values for a parameter to a 'ParseResult'. Duplicate values
 -- will not be added, if there are already values for the parameter.
 addParameter :: ParseResult -> Parameter -> Either String ParseResult
-addParameter pr@(ParseResult pc@(ParameterComposition ps _)) p@(Parameter pn pvs) =
+addParameter pr@(ParseResult pc@(ParameterComposition ps _)) p@(Parameter pn r) =
   case getParameter pr pn of
     Nothing -> return $ ParseResult $ pc {parameters = ps ++ [p]}
-    Just (Parameter _ pvs2) -> do
-      mergedValues <- mergeParameterValues pvs2 pvs
+    Just (Parameter _ r2) -> do
+      mergedValues <- mergeRanges' r2 r
       return $ ParseResult $ pc {parameters = foldl' (replace $ Parameter pn mergedValues) [] ps}
   where
     replace :: Parameter -> [Parameter] -> Parameter -> [Parameter]
@@ -53,24 +36,27 @@ addParameter pr@(ParseResult pc@(ParameterComposition ps _)) p@(Parameter pn pvs
       | otherwise = acc ++ [p2]
 
 -- | Merge two 'ParameterValues'. Removes duplicates.
-mergeParameterValues :: Seq ParameterValue -> Seq ParameterValue -> Either String (Seq ParameterValue)
-mergeParameterValues vs1 vs2 =
-  (Right . Seq.fromList . nub) (toList vs1 ++ toList vs2)
+mergeRanges' :: Range -> Range -> Either String Range
+mergeRanges' vs1 vs2 = case (vs1, vs2) of
+  (Single sr, Single sr2) -> Right . Single $ mergeRanges sr sr2
+  (SingleTuple st, SingleTuple st2) -> Right . SingleTuple $ mergeRanges st st2
+  (Multi st, Multi st2) -> Right . Multi $ mergeRanges st st2
+  (MultiTuple st, MultiTuple st2) -> Right . MultiTuple $ mergeRanges st st2
+  _ -> Left "It is not allowed to mix different types of values in the same parameter."
 
 -- | Add a constraint between two parameter values.
-addConstraint :: ParseResult -> (ParameterName, ParameterValue) -> (ParameterName, ParameterValue) -> Either String ParseResult
-addConstraint pr@(ParseResult pc) v1 v2 =
-  let v1pos :: Maybe Int
-      v1pos = uncurry (findValueIndex pr) v1
-
-      v2pos :: Maybe Int
-      v2pos = uncurry (findValueIndex pr) v2
+addConstraint :: (ValueType vt1 r1, ValueType vt2 r2) => ParseResult -> (ParameterName, vt1) -> (ParameterName, vt2) -> Either String ParseResult
+addConstraint pr@(ParseResult pc) (p1, v1) (p2, v2) =
+  let pos :: ValueType v r => ParameterName -> v -> Maybe Int
+      pos p v = do
+        p' <- getParameter pr p
+        findValueIndex p' v
 
       constraintsNew :: Maybe [Constraint]
       constraintsNew = do
-        v1pos' <- v1pos
-        v2pos' <- v2pos
-        return $ nub $ getConstraints pr ++ [Constraint (fst v1, v1pos') (fst v2, v2pos')]
+        v1pos <- pos p1 v1
+        v2pos <- pos p2 v2
+        return $ nub $ getConstraints pr ++ [Constraint (p1, v1pos) (p2, v2pos)]
    in do
         constraintsNew' <- maybeToEither constraintsNew "Cannot add constraint"
         return $ ParseResult $ pc {constraints = constraintsNew'}

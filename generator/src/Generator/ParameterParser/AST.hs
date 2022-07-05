@@ -60,9 +60,15 @@ data ParameterValue
 data ParameterValuePart = Simple String | IdUsage Identifier | TupleSelect Identifier Int
   deriving (Show, Eq, Ord)
 
-isIdUsage :: ParameterValuePart -> Bool
-isIdUsage (IdUsage _) = True
-isIdUsage _ = False
+containsOtherParameters :: ParameterValuePart -> Bool
+containsOtherParameters (IdUsage _) = True
+containsOtherParameters (TupleSelect _ _) = True
+containsOtherParameters _ = False
+
+isTuplePart :: ParameterPart -> Bool
+isTuplePart (SingleParameterPart _ ((Tuple _) : _)) = True
+isTuplePart (MultiParameterPart _ (((Tuple _) : _) : _)) = True
+isTuplePart _ = False
 
 type Identifier = String
 

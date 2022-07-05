@@ -20,7 +20,6 @@ library
       Generator.ParseResult.Info,
       Generator.ParseResult.FromAST,
       Generator.ToParseResult,
-      Generator.Configuration.Construction,
       Generator.Configuration.Type,
       Generator.Configuration.FromParseResult,
       Generator.Configuration.Internal,

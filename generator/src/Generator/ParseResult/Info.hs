@@ -1,71 +1,29 @@
-module Generator.ParseResult.Info (
-    findValueIndex,
-    getAtIndex,
-    getAtIndexSingle,
-    getAtIndexMulti,
-    getParameterValues,
-    getParameter,
+{-# LANGUAGE FunctionalDependencies #-}
+
+module Generator.ParseResult.Info
+  ( getParameter,
     getParameterNames,
-    countValues,
+    findValueIndex,
+    makeParam,
+    makeRange,
+    mergeRanges,
+    getValues,
     getConstraints,
+    countValues,
+    from,
+    to,
     containsMultiParamUsage,
-    first,
-    second,
+    ValueType,
     isSingle,
-    isMulti
-) where
-
-import Data.Foldable (Foldable (foldl', toList), find)
-import Data.Sequence as Seq (Seq, elemIndexL, length, lookup)
-import Generator.ParameterName (ParameterName, unParameterName)
-import Generator.ParseResult.Type
-  ( Constraint (..),
-    Parameter (..),
-    ParameterComposition (ParameterComposition),
-    ParameterValue (..),
-    ParseResult (..),
-    Value (..),
-    ValuePart (..),
-    RegularValue (..),
-    TupleValue (..)
   )
+where
 
-findValueIndex :: ParseResult -> ParameterName -> ParameterValue -> Maybe Int
-findValueIndex pr pn v = case getParameterValues pr pn of
-  Left _ -> Nothing
-  Right vs -> Seq.elemIndexL v vs
-
-getAtIndex :: ParseResult -> ParameterName -> Int -> Either String ParameterValue
-getAtIndex pr pn i = case getParameterValues pr pn of
-  Left s -> Left s
-  Right vs -> getE vs
-  where
-    getE :: Seq a -> Either String a
-    getE s = case Seq.lookup i s of
-      Nothing -> Left "Index out of bounds"
-      Just a -> Right a
-
-getAtIndexSingle :: ParseResult -> ParameterName -> Int -> Either String Value
-getAtIndexSingle pr pn i = case getAtIndex pr pn i of
-  Left s -> Left s
-  Right (SingleValue v) -> return v
-  Right (MultiValue _) -> Left $ unParameterName pn ++ " is not a single parameter."
-
-getAtIndexMulti :: ParseResult -> ParameterName -> Int -> Either String (Seq Value)
-getAtIndexMulti pr pn i = case getAtIndex pr pn i of
-  Left s -> Left s
-  Right (MultiValue v) -> return v
-  Right (SingleValue _) -> Left $ unParameterName pn ++ " is not a multi parameter."
-
--- | Get all values for a specific parameter.
-getParameterValues :: ParseResult -> ParameterName -> Either String (Seq ParameterValue)
-getParameterValues ps pn =
-  case parameter of
-    Just (Parameter _ pvs) -> Right pvs
-    Nothing -> Left $ "No values for parameter " ++ unParameterName pn
-  where
-    parameter :: Maybe Parameter
-    parameter = getParameter ps pn
+import Data.Foldable (Foldable (toList), find)
+import Data.List (nub)
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq (elemIndexL, fromList)
+import Generator.ParameterName (ParameterName)
+import Generator.ParseResult.Type
 
 -- | Get a 'Parameter' from a 'ParseResult' by its name
 getParameter :: ParseResult -> ParameterName -> Maybe Parameter
@@ -73,81 +31,125 @@ getParameter (ParseResult (ParameterComposition ps _)) pn =
   find f ps
   where
     f :: Parameter -> Bool
-    f (Parameter name _) = name == pn
+    f p = name p == pn
 
--- | Get a List of the names of all contained Parameters
+class (Eq v) => ValueType v r | v -> r, r -> v where
+  findValueIndex :: Parameter -> v -> Maybe Int
+  makeRange :: [v] -> r
+  makeParam :: ParameterName -> r -> Parameter
+  getValues :: r -> [v]
+  mergeRanges :: r -> r -> r
+  containsMultiParam :: ParseResult -> v -> Bool
+
+instance ValueType RegularValue SingleRange where
+  findValueIndex (Parameter _ (Single (SingleRange vs))) v = Seq.elemIndexL v vs
+  findValueIndex _ _ = Nothing
+  makeRange vs = SingleRange (Seq.fromList vs)
+  makeParam pn r = Parameter pn (Single r)
+  getValues (SingleRange vs) = toList vs
+  mergeRanges r1 r2 = (SingleRange . Seq.fromList . nub) (getValues r1 ++ getValues r2)
+
+  containsMultiParam _ (Final _) = False
+  containsMultiParam pr (NeedsInput vps) = any (valuePartContainsMultiParamUsage pr) vps
+
+instance ValueType TupleValue SingleTupleRange where
+  findValueIndex (Parameter _ (SingleTuple (SingleTupleRange vs))) v = Seq.elemIndexL v vs
+  findValueIndex _ _ = Nothing
+  makeRange vs = SingleTupleRange (Seq.fromList vs)
+  makeParam pn r = Parameter pn (SingleTuple r)
+  getValues (SingleTupleRange vs) = toList vs
+  mergeRanges r1 r2 = (SingleTupleRange . Seq.fromList . nub) (getValues r1 ++ getValues r2)
+
+  containsMultiParam pr (Tuple rvs) = any (containsMultiParam pr) rvs
+
+instance ValueType (Seq RegularValue) MultiRange where
+  findValueIndex (Parameter _ (Multi (MultiRange vs))) v = Seq.elemIndexL v vs
+  findValueIndex _ _ = Nothing
+  makeRange vs = MultiRange (Seq.fromList vs)
+  makeParam pn r = Parameter pn (Multi r)
+  getValues (MultiRange vs) = toList vs
+  mergeRanges r1 r2 = (MultiRange . Seq.fromList . nub) (getValues r1 ++ getValues r2)
+
+  containsMultiParam pr rvs = any (containsMultiParam pr) rvs
+
+instance ValueType (Seq TupleValue) MultiTupleRange where
+  findValueIndex (Parameter _ (MultiTuple (MultiTupleRange vs))) v = Seq.elemIndexL v vs
+  findValueIndex _ _ = Nothing
+  makeRange vs = MultiTupleRange (Seq.fromList vs)
+  makeParam pn r = Parameter pn (MultiTuple r)
+  getValues (MultiTupleRange vs) = toList vs
+  mergeRanges r1 r2 = (MultiTupleRange . Seq.fromList . nub) (getValues r1 ++ getValues r2)
+
+  containsMultiParam pr tvs = any (containsMultiParam pr) tvs
+
+containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
+containsMultiParamUsage pr pn = case getParameter pr pn of
+  Nothing -> False
+  Just (Parameter _ (Single (SingleRange vs))) -> any (containsMultiParam pr) vs
+  Just (Parameter _ (Multi (MultiRange vs))) -> any (containsMultiParam pr) vs
+  Just (Parameter _ (SingleTuple (SingleTupleRange vs))) -> any (containsMultiParam pr) vs
+  Just (Parameter _ (MultiTuple (MultiTupleRange vs))) -> any (containsMultiParam pr) vs
+
+name :: Parameter -> ParameterName
+name (Parameter n _) = n
+
 getParameterNames :: ParseResult -> [ParameterName]
 getParameterNames (ParseResult (ParameterComposition ps _)) =
-  map f ps
-  where
-    f :: Parameter -> ParameterName
-    f (Parameter name _) = name
-
--- | Get the amount of values for a parameter
-countValues :: ParseResult -> ParameterName -> Int
-countValues pr pn = case parameter of
-  Nothing -> 0
-  Just (Parameter _ vs) -> Seq.length vs
-  where
-    parameter = getParameter pr pn
+  map name ps
 
 -- | Get the list of constraints from a 'ParseResult'
 getConstraints :: ParseResult -> [Constraint]
 getConstraints (ParseResult (ParameterComposition _ cs)) = cs
 
--- | Check if parameter contains a multi parameter usage somewhere in its values
-containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
-containsMultiParamUsage pr n = any f $ getAllValues pr n
-  where
-    f :: Value -> Bool
-    f (RegularValue rv) = f' rv
-    f (TupleValue (Tuple _)) = False
+-- | Get the first tuple of a constraint
+from :: Constraint -> (ParameterName, Int)
+from (Constraint x _) = x
 
-    f' :: RegularValue -> Bool
-    f' (Final _) = False
-    f' (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs
+-- | Get the second tuple of a constraint
+to :: Constraint -> (ParameterName, Int)
+to (Constraint _ x) = x
+
+countValues :: ParseResult -> ParameterName -> Int
+countValues pr pn = case getParameter pr pn of
+  Nothing -> 0
+  Just (Parameter _ range) -> case range of
+    Single r -> length . getValues $ r
+    SingleTuple r -> length . getValues $ r
+    Multi r -> length . getValues $ r
+    MultiTuple r -> length . getValues $ r
+
+isMulti :: ParseResult -> ParameterName -> Bool
+isMulti pr pn = case getParameter pr pn of
+  Just (Parameter _ (Multi _)) -> True
+  Just (Parameter _ (MultiTuple _)) -> True
+  _ -> False
+
+isSingle :: ParseResult -> ParameterName -> Bool
+isSingle pr pn = case getParameter pr pn of
+  Just (Parameter _ (Single _)) -> True
+  Just (Parameter _ (SingleTuple _)) -> True
+  _ -> False
 
 valuePartContainsMultiParamUsage :: ParseResult -> ValuePart -> Bool
 valuePartContainsMultiParamUsage _ (StringPart _) = False
 valuePartContainsMultiParamUsage pr (ParameterPart pn) = isMulti pr pn
+valuePartContainsMultiParamUsage pr (TupleSelect pn _) = isMulti pr pn
 
--- | Get all 'Value's of a parameter, no matter if single or multi
-getAllValues :: ParseResult -> ParameterName -> [Value]
-getAllValues pr pn = case getParameter pr pn of
-  Nothing -> []
-  Just (Parameter _ vs) -> foldl' f [] vs
-  where
-    f :: [Value] -> ParameterValue -> [Value]
-    f vs pv = vs ++ getAllValuesFromParameterValue pv
+-- | Check if parameter contains a multi parameter usage somewhere in its values
 
-getAllValuesFromParameterValue :: ParameterValue -> [Value]
-getAllValuesFromParameterValue (SingleValue v) = [v]
-getAllValuesFromParameterValue (MultiValue vs) = toList vs
+{- containsMultiParamUsage :: ParseResult -> ParameterName -> Bool
+containsMultiParamUsage pr n = case getParameter pr n of
+  Nothing -> False
+  Just (Parameter _ range) -> getValues range
+   -}
 
--- | Get the first tuple of a constraint
-first :: Constraint -> (ParameterName, Int)
-first (Constraint x _) = x
+{-
+any f $ getAllValues pr n
+where
+  f :: Value -> Bool
+  f (RegularValue rv) = f' rv
+  f (TupleValue (Tuple _)) = False
 
--- | Get the second tuple of a constraint
-second :: Constraint -> (ParameterName, Int)
-second (Constraint _ x) = x
-
--- | Checks if the parameter is a single parameter
-isSingle :: ParseResult -> ParameterName -> Bool
-isSingle pr pn = case param of
-  Just (Parameter _ vs) -> case Seq.lookup 0 vs of
-    Just (SingleValue _) -> True
-    _ -> False
-  _ -> False
-  where
-    param = getParameter pr pn
-
--- | Checks if the parameter is a multi parameter
-isMulti :: ParseResult -> ParameterName -> Bool
-isMulti pr pn = case param of
-  Just (Parameter _ vs) -> case Seq.lookup 0 vs of
-    Just (MultiValue _) -> True
-    _ -> False
-  _ -> False
-  where
-    param = getParameter pr pn
+  f' :: RegularValue -> Bool
+  f' (Final _) = False
+  f' (NeedsInput vs) = any (valuePartContainsMultiParamUsage pr) vs -}

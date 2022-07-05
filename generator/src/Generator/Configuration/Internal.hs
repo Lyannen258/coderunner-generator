@@ -6,6 +6,14 @@ import Data.List (find, intercalate)
 import Generator.Helper (maybeToEither)
 import Text.Read (readMaybe)
 import Lens.Micro ((^.))
+import System.Random (randoms, getStdGen)
+
+empty :: IO Configuration
+empty = do
+  Configuration [] . randoms <$> getStdGen
+
+addParameter :: Configuration -> Parameter -> Configuration
+addParameter (Configuration ps rs) p = Configuration (ps ++ [p]) rs
 
 getParameter :: Configuration -> ParameterName -> Maybe Parameter
 getParameter c pn = find f (parameters c)
@@ -15,6 +23,13 @@ getParameter c pn = find f (parameters c)
 
 getValueComponent :: Configuration -> ParameterName -> Maybe ValueComponent
 getValueComponent c pn = valueComponent <$> getParameter c pn
+
+getMultiValue' :: Configuration -> ParameterName -> Maybe [Value]
+getMultiValue' c pn = do
+  vc <- getValueComponent c pn
+  case vc of
+    Single _ -> Nothing
+    Multi mc -> Just $ mc ^. selectedValueRange
 
 getTupleX :: ParameterName -> String -> String -> Value -> Either String String
 getTupleX pn arg fn v = case v of

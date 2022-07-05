@@ -3,8 +3,8 @@ Writing a Statement
 Author:
 Janik Eriksson
 Parameter:
-numeral([("I", "1"), ("V", "5")]) 
-choices("if(numeral=='{{ numeral.get(5) }}') return {{ numeral.get(5) }};")
+numeral([("I", "1"), ("V", "5"), ("X", "10"), ("L", "50"), ("C", "100"), ("D", "500"), ("M", "1000")]) 
+choices("if(numeral=='{{ numeral.get(0) }}') return {{ numeral.get(1) }};")
 Task:
 Complete the given code so that it returns the number corresponding to the roman numeral. Roman numeral to number ({I,1};{V,5};{X,10};{L,50};{C,100};{D,500};{M,1000})
 Solution:

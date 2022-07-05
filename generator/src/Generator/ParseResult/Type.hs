@@ -1,7 +1,7 @@
 module Generator.ParseResult.Type where
 
-import Generator.ParameterName
 import Data.Sequence as Seq
+import Generator.ParameterName
 
 -- | Main data type. Used to pass information from a specialized generator to the main generator.
 newtype ParseResult = ParseResult ParameterComposition -- maybe add Enumeration in future
@@ -17,19 +17,27 @@ data ParameterComposition = ParameterComposition
   deriving (Show)
 
 -- | Data type for a parameter. Contains the parameter name and a list of possible values.
-data Parameter
-  = Parameter ParameterName (Seq ParameterValue)
+data Parameter = Parameter ParameterName Range
   deriving (Show)
 
--- | A parameter value. Needed to differentiate between single values and value ranges
-data ParameterValue
-  = SingleValue Value
-  | MultiValue (Seq Value)
-  deriving (Show, Eq)
+data Range
+  = Single SingleRange
+  | SingleTuple SingleTupleRange
+  | Multi MultiRange
+  | MultiTuple MultiTupleRange
+  deriving (Show)
 
--- | Contains information about a value
-data Value = RegularValue RegularValue | TupleValue TupleValue
-  deriving (Show, Eq)
+newtype SingleRange = SingleRange (Seq RegularValue)
+  deriving (Show)
+
+newtype SingleTupleRange = SingleTupleRange (Seq TupleValue)
+  deriving (Show)
+
+newtype MultiRange = MultiRange (Seq (Seq RegularValue))
+  deriving (Show)
+
+newtype MultiTupleRange = MultiTupleRange (Seq (Seq TupleValue))
+  deriving (Show)
 
 -- | Data that contains information about a regular value for a parameter.
 data RegularValue
@@ -40,7 +48,7 @@ data RegularValue
   deriving (Eq, Show)
 
 -- | Represents a tuple
-newtype TupleValue = Tuple [String]
+newtype TupleValue = Tuple (Seq RegularValue)
   deriving (Eq, Show)
 
 -- | Data type that makes up the parts for a not fully determined 'Value'.

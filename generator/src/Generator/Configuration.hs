@@ -12,12 +12,12 @@ module Generator.Configuration
   )
 where
 
+import Generator.Configuration.Internal
 import Generator.Configuration.Type
 import Generator.Helper (maybeToEither, singleton)
 import Generator.ParameterName
 import Lens.Micro ((^.))
 import Text.Read (readMaybe)
-import Generator.Configuration.Internal
 
 getSingleValue :: Configuration -> ParameterName -> Maybe String
 getSingleValue c pn = do
@@ -28,10 +28,8 @@ getSingleValue c pn = do
 
 getMultiValue :: Configuration -> ParameterName -> Maybe [String]
 getMultiValue c pn = do
-  vc <- getValueComponent c pn
-  case vc of
-    Single _ -> Nothing
-    Multi mc -> mapM toString (mc ^. selectedValueRange)
+  vs <- getMultiValue' c pn
+  mapM toString vs
 
 contains :: Configuration -> ParameterName -> Bool
 contains c pn = case getParameter c pn of
