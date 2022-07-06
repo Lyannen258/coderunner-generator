@@ -73,7 +73,7 @@ removeForbidden pr = filter f
       where
         constraintFulfilled :: Constraint -> Bool
         constraintFulfilled c
-          | PR.from c `elem` config = PR.from c `elem` config
+          | PR.from c `elem` config = PR.to c `elem` config
           | otherwise = True
 
     constraintsL :: [Constraint]
