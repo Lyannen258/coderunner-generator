@@ -1,16 +1,16 @@
 module Generator.Main (main) where
 
-import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
-import Generator.Helper (printLn)
-import Generator.App (App)
-import Generator.Globals
-import Generator.ParseResult (ParseResult)
-import Generator.ToParseResult (ToParseResult (toParseResult))
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except)
 import Control.Monad.Trans.Reader (asks)
+import Generator.App (App)
+import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
+import Generator.Globals
+import Generator.Helper (printLn)
+import Generator.ParseResult (ParseResult)
+import Generator.ToParseResult (ToParseResult (toParseResult))
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (dropExtension, takeBaseName, takeDirectory, (</>))
 import System.IO
@@ -23,8 +23,9 @@ main = do
 
   parser <- asks getParser
   (ret, u) <- lift . except $ parser fileContent
-  parseResult <- lift . except $ toParseResult ret
   debugOutput ret
+  parseResult <- lift . except $ toParseResult ret
+  debugOutput parseResult
 
   maxFlagActive <- asks getMaxConfigurations
   if maxFlagActive
@@ -46,7 +47,6 @@ printMaxAmount m = do
 mainConfigurations :: ParseResult -> u -> App r u ()
 mainConfigurations parseResult u = do
   configs <- computeConfigurations parseResult
-  debugOutput configs
 
   generator <- asks getGenerator
   results <- lift . except $ generator configs u
@@ -71,7 +71,7 @@ createOutputDirectory :: App r u ()
 createOutputDirectory = do
   maxFlagActive <- asks getMaxConfigurations
   filePath <- asks getTemplateFilePath
-  when maxFlagActive $ liftIO $ createDirectoryIfMissing True $ dropExtension filePath
+  unless maxFlagActive $ liftIO $ createDirectoryIfMissing True $ dropExtension filePath
 
 -- | Write content to a file in the output directory
 writeToFile :: String -> String -> App r u ()
