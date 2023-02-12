@@ -4,42 +4,35 @@
 
 module Generator.Configuration.Type where
 
-import Generator.ParameterName (ParameterName)
-import Lens.Micro.TH (makeFields)
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.State
+import Generator.Atoms
+import Generator.ParseResult.Type (ParseResult)
+
+newtype ParseResultFinal x = ParseResultFinal
+  {unParseResultFinal :: ReaderT ParseResult (StateT Configuration (Either String)) x}
+  deriving
+    ( Functor,
+      Applicative,
+      Monad,
+      MonadState Configuration,
+      MonadError String,
+      MonadReader ParseResult
+    )
 
 data Configuration = Configuration
-  { parameters :: [Parameter],
+  { singleParameters :: [Parameter SingleValue AtomicValue],
+    singleTupleParameters :: [Parameter SingleTupleValue AtomicValue],
+    multiParameters :: [Parameter MultiValue AtomicValue],
+    multiTupleParameters :: [Parameter MultiTupleValue AtomicValue],
     randomNumbers :: [Int]
   }
   deriving (Show)
 
-data Parameter = Parameter
+data Parameter v a = Parameter
   { name :: ParameterName,
-    valueComponent :: ValueComponent
+    selectedValue :: v a,
+    range :: RangeType v a
   }
   deriving (Show)
-
-data ValueComponent = Single SingleComponent | Multi MultiComponent
-  deriving (Show)
-
-data SingleComponent = SingleComponent
-  { _singleComponentSelectedValue :: Value,
-    _singleComponentAllValues :: [Value]
-  }
-  deriving (Show)
-
-data MultiComponent = MultiComponent
-  { _multiComponentSelectedValueRange :: [Value],
-    _multiComponentAllValueRanges :: [[Value]]
-  }
-  deriving (Show)
-
-data Value = Regular String | Tuple [String]
-  deriving (Show)
-
-tupleInsideAnotherValue :: String
-tupleInsideAnotherValue =
-  "Found a tuple-parameter inside of the value range of another parameter."
-
-makeFields ''SingleComponent
-makeFields ''MultiComponent

@@ -3,6 +3,7 @@ module Generator.ParserUtils where
 import Data.Void (Void)
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import Generator.Atoms
 import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void String
@@ -29,8 +30,8 @@ hlexeme = L.lexeme hwhitespace
 requiresParser :: Parser String
 requiresParser = lexeme (string "requires")
 
-identifierParser :: Parser String
-identifierParser = lexeme (some (letterChar <|> char '-' <|> char '_'))
+identifierParser :: Parser ParameterName
+identifierParser = ParameterName <$> lexeme (some (letterChar <|> char '-' <|> char '_'))
 
 parameterHeadlineParser :: Parser String
 parameterHeadlineParser = hlexeme (string "Parameter:" <* eol)

@@ -3,6 +3,7 @@ module Generator.ToParseResult where
 import Generator.ParameterParser.AST (ParameterAST)
 import Generator.ParseResult (ParseResult)
 import Generator.ParseResult.FromAST (fromParameterAST)
+import Generator.ParseResult.Type (ParseResult)
 
 -- | Overloading the constructParseResult function for different
 -- return types
@@ -11,7 +12,7 @@ class Show return => ToParseResult return where
 
 -- | Instance of ToParseResult for ParseResult (trivial)
 instance ToParseResult ParseResult where
-  toParseResult parseResult = Right parseResult
+  toParseResult = Right 
 
 -- | Instance of ToParseResult for a string
 --
