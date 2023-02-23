@@ -1,4 +1,3 @@
-{-# LANGUAGE FunctionalDependencies #-}
 
 module Generator.ParseResult.Info
   ( getParameter,
@@ -18,16 +17,13 @@ where
 
 import Control.Monad.Except
 import Control.Monad.State
-import Data.Foldable (Foldable (toList), find)
-import Data.List (nub)
-import Data.Sequence (Seq)
-import Data.Sequence qualified as Seq (elemIndexL, empty, fromList)
 import Generator.Atoms
-import Generator.Helper (maybeToEither)
 import Generator.ParseResult.Type
+import qualified Data.Sequence as Seq
+import Data.List (find)
 
 -- | Get a 'Parameter' from a 'ParseResult' by its name
-getParameter :: ParseResult -> ParameterName -> Maybe (Parameter)
+getParameter :: ParseResult -> ParameterName -> Maybe Parameter
 getParameter (ParseResult (ParameterComposition ps _)) pn =
   find f ps
   where

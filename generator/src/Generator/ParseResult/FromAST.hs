@@ -1,20 +1,14 @@
 module Generator.ParseResult.FromAST where
 
-import Control.Monad (foldM, liftM, mapM)
--- import Generator.ParseResult.Info (ValueType)
-
 import Control.Monad.Except
 import Control.Monad.State
-import Data.Foldable (Foldable (foldl', toList))
-import Data.Sequence qualified as Seq
+import Data.Foldable (Foldable (toList))
 import Generator.Atoms
-import Generator.Helper (maybeToEither, maybeToParseResult)
+import Generator.Helper (maybeToError)
 import Generator.ParameterParser.AST as AST
 import Generator.ParseResult
 import Generator.ParseResult.Info
-import Generator.ParseResult.Type (ParseResultBuilder (ParseResultBuilder))
 import Generator.ParseResult.Type as PR
-import Lens.Micro ((^.))
 
 fromParameterAST :: AST.ParameterAST -> Either String ParseResult
 fromParameterAST pAST = case runState (runExceptT . unParseResultM $ f) empty of
@@ -34,9 +28,9 @@ combineParameterParts ppMain ppReq = do
   addParameter $ Parameter ppMain.identifier ppMain.range
   addParameter $ Parameter ppReq.identifier ppMain.range
   mainIndices <- indicesFromRange ppMain
-  mainIndices' <- mapM (`maybeToParseResult` "combineParameterParts: Cannot add constraint, if not all values exist") mainIndices
+  mainIndices' <- mapM (`maybeToError` "combineParameterParts: Cannot add constraint, if not all values exist") mainIndices
   reqIndices <- indicesFromRange ppReq
-  reqIndices' <- mapM (`maybeToParseResult` "combineParameterParts: Cannot add constraint, if not all values exist") reqIndices
+  reqIndices' <- mapM (`maybeToError` "combineParameterParts: Cannot add constraint, if not all values exist") reqIndices
   addConstraints
     (ppMain.identifier, mainIndices')
     (ppReq.identifier, reqIndices')

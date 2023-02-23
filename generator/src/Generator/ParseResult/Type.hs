@@ -20,16 +20,7 @@ newtype ParseResultBuilder x = ParseResultBuilder
       MonadError String
     )
 
-newtype ParseResultFinal x = ParseResultFinal
-  {unParseResultFinal :: ReaderT ParseResult (StateT Configuration (Either String)) x}
-  deriving
-    ( Functor,
-      Applicative,
-      Monad,
-      MonadState Configuration,
-      MonadError String,
-      MonadReader ParseResult
-    )
+
 
 -- | Main data type. Used to pass information from a specialized generator to the main generator.
 newtype ParseResult = ParseResult {comp :: ParameterComposition} -- maybe add Enumeration in future

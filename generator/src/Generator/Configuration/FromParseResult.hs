@@ -1,30 +1,25 @@
+
+
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
-import Control.Monad (foldM, when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (catchE, except, throwE)
-import Control.Monad.Trans.Reader (asks, liftCatch)
-import Data.Foldable (find, foldl')
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.State
+import Data.Foldable (Foldable (toList), foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
-import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Generator.App
-import Generator.Atoms (ParameterName, ValuePart)
+import Generator.Atoms
 import Generator.Configuration as C
 import Generator.Configuration.Internal as C
 import Generator.Configuration.Type
 import Generator.Globals (getAmount)
-import Generator.Helper (maybeToEither, printLn, singleton)
+import Generator.Helper (maybeToError, printLn, singleton)
 import Generator.ParseResult.Info qualified as PR
 import Generator.ParseResult.Type (Constraint, ParseResult)
 import Generator.ParseResult.Type qualified as PR
 import System.Random (RandomGen, getStdGen, uniformR)
-
-newtype ConfigListRaw = [ConfigRaw]
-
-newtype ConfigRaw = [(ParameterName, Int)]
 
 computeMaxAmount :: ParseResult -> App r u Int
 computeMaxAmount pr = case allCombinations pr of
@@ -32,19 +27,18 @@ computeMaxAmount pr = case allCombinations pr of
   clr -> (return . length . removeForbidden pr) clr
 
 computeConfigurations :: ParseResult -> App r u [Configuration]
-computeConfigurations pr = do
-  case allCombinations pr of
-    [] -> do
-      amount <- evaluateRequestedAmount 1
-      if amount == 1
-        then (liftIO . sequence) [C.empty] -- Generate single empty configuration, if no parameters specified
-        else return []
-    combs -> do
-      let withoutForbidden = removeForbidden pr combs
-      amount <- evaluateRequestedAmount (length withoutForbidden)
-      randoms <- getRandomNumbers amount (length withoutForbidden)
-      let configurations = map (generateConfiguration pr withoutForbidden) randoms
-      sequence configurations
+computeConfigurations pr = case allCombinations pr of
+  [] -> do
+    amount <- evaluateRequestedAmount 1
+    if amount == 1
+      then (liftIO . sequence) [C.empty] -- Generate single empty configuration, if no parameters specified
+      else return []
+  combs -> do
+    let withoutForbidden = removeForbidden pr combs
+    amount <- evaluateRequestedAmount (length withoutForbidden)
+    randoms <- getRandomNumbers amount (length withoutForbidden)
+    let configurations = map (generateConfiguration pr withoutForbidden) randoms
+    sequence configurations
 
 allCombinations :: ParseResult -> ConfigListRaw
 allCombinations pr =
@@ -55,14 +49,14 @@ allCombinations pr =
       parameterValueTuples = map f' parameterNames
         where
           f' :: ParameterName -> ConfigRaw
-          f' pn = zip (repeat pn) [0 .. PR.countValues pr pn - 1]
+          f' pn = ConfigRaw $ map (pn,) [0 .. PR.countValues pr pn - 1]
 
       f :: ConfigListRaw -> ConfigRaw -> ConfigListRaw
-      f [] parameterValueTuple = map singleton parameterValueTuple
+      f [] parameterValueTuple = map (ConfigRaw . singleton) parameterValueTuple.config
       f acc parameterValueTuple = concatMap f' acc
         where
           f' :: ConfigRaw -> ConfigListRaw
-          f' config = map (\pv -> config ++ [pv]) parameterValueTuple
+          f' config = map (\pv -> ConfigRaw $ config.config ++ [pv]) parameterValueTuple.config
    in foldl' f [] parameterValueTuples
 
 removeForbidden :: ParseResult -> ConfigListRaw -> ConfigListRaw
@@ -73,7 +67,7 @@ removeForbidden pr = filter f
       where
         constraintFulfilled :: Constraint -> Bool
         constraintFulfilled c
-          | PR.from c `elem` config = PR.to c `elem` config
+          | PR.from c `elem` config.config = PR.to c `elem` config.config
           | otherwise = True
 
     constraintsL :: [Constraint]
@@ -115,71 +109,138 @@ getNDistinct amountNumbers amountConfigs = fillToN []
           let (rand, newGen) = uniformR (0, amountConfigs - 1) std
            in fillToN (rand : acc) newGen
 
-computeAtomicValues :: IncompleteParseResult -> Either String CompleteParseResult
-makeFinal pr = case execStateT (runReaderT (unParseResultFinal action) pr) empty of
-  Left e -> Left e
-  Right cpr -> Right cpr
+generateConfiguration :: (MonadIO m, MonadError String m) => ParseResult -> ConfigListRaw -> Int -> m Configuration
+generateConfiguration pr configs rand = makeConfig pr configRaw
   where
-    action :: ParseResultFinal ()
+    configRaw = configs !! rand
+
+-- f :: Configuration -> (ParameterName, Int) -> m Configuration
+-- f c x
+--   | contains c (fst x) = return c
+--   | otherwise = case PR.getParameter pr (fst x) of
+--       Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
+--       Just pa -> buildParameter pr configRaw c pa
+
+-- Here begins the refactored version
+
+makeConfig :: (MonadIO m, MonadError String m) => ParseResult -> ConfigRaw -> m Configuration
+makeConfig pr cr = do
+  emptyC <- liftIO empty
+  case execStateT (runReaderT (unConfigurationM action) (cr, pr)) emptyC of
+    Left e -> throwError e
+    Right cpr -> return cpr
+  where
+    action :: ConfigurationM ()
     action = mapM_ processParameter pr.comp.parameters
 
-processParameter :: Parameter IncompleteAtomicValue -> ParseResultFinal ()
+processParameter :: PR.Parameter -> ConfigurationM ()
 processParameter p = case p.range of
   Single r -> processSingle p.name r
   SingleTuple r -> processSingleTuple p.name r
   Multi r -> processMulti p.name r
   MultiTuple r -> processMultiTuple p.name r
 
-processSingle :: ParameterName -> SingleRange IncompleteAtomicValue -> ParseResultFinal ()
+processSingle :: ParameterName -> SingleRange IncompleteAtomicValue -> ConfigurationM ()
 processSingle n sr = do
   let vs = fmap (.value) sr.range
   newValues <- mapM makeFinalAtomicValue vs
   let newSValues = fmap SV newValues
-  addParameter $ Parameter n $ (Single . RangeType) newSValues
+  index <- getSelection n
+  selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
+  addSingleParameter $ Parameter n (SV selectedValue) (RangeType newSValues)
 
-processSingleTuple :: ParameterName -> SingleTupleRange IncompleteAtomicValue -> ParseResultFinal ()
+processSingleTuple :: ParameterName -> SingleTupleRange IncompleteAtomicValue -> ConfigurationM ()
 processSingleTuple n str = do
   let vs = fmap (.value) str.range
   newValues <- (mapM . mapM) makeFinalAtomicValue vs
   let newSTValues = fmap STV newValues
-  addParameter $ Parameter n $ (SingleTuple . RangeType) newSTValues
+  index <- getSelection n
+  selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
+  addSingleTupleParameter $ Parameter n (STV selectedValue) (RangeType newSTValues)
 
-processMulti :: ParameterName -> MultiRange IncompleteAtomicValue -> ParseResultFinal ()
+processMulti :: ParameterName -> MultiRange IncompleteAtomicValue -> ConfigurationM ()
 processMulti n str = do
   let vs = fmap (.value) str.range
   newValues <- (mapM . mapM) makeFinalAtomicValue vs
   let newMValues = fmap MV newValues
-  addParameter $ Parameter n $ (Multi . RangeType) newMValues
+  index <- getSelection n
+  selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
+  addMultiParameter $ Parameter n (MV selectedValue) (RangeType newMValues)
 
-processMultiTuple :: ParameterName -> MultiTupleRange IncompleteAtomicValue -> ParseResultFinal ()
+processMultiTuple :: ParameterName -> MultiTupleRange IncompleteAtomicValue -> ConfigurationM ()
 processMultiTuple n str = do
   let vs = fmap (.value) str.range
   newValues <- (mapM . mapM . mapM) makeFinalAtomicValue vs
+  checkMultiUsageRequirements
   let newMValues = fmap MTV newValues
-  addParameter $ Parameter n $ (MultiTuple . RangeType) newMValues
+  index <- getSelection n
+  selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
+  addMultiTupleParameter $ Parameter n (MTV selectedValue) (RangeType newMValues)
 
-makeFinalAtomicValue :: IncompleteAtomicValue -> ParseResultFinal AtomicValue
-makeFinalAtomicValue iav = mapM makeFinalValuePart iav.parts
+makeFinalAtomicValue :: IncompleteAtomicValue -> ConfigurationM (Either AtomicValue [AtomicValue])
+makeFinalAtomicValue iav = do
+  parts <- mapM makeFinalValuePart iav.parts
+  avs <- foldM f [] parts
+  where
+    f :: 
 
-makeFinalValuePart :: ValuePart -> ParseResultFinal String
-makeFinalValuePart (StringPart s) = return s
+data ValuePartProcessed =
+  Simple String
+  | Several ParameterName [String] -- Origin and values
 
--- makeFinalValuePart (TupleSelect n i) =
--- makeFinalValuePart (IdUsage n) =
+makeFinalValuePart :: ValuePart -> ConfigurationM ValuePartProcessed
+makeFinalValuePart (StringPart s) = return $ Simple s
+makeFinalValuePart (IdUsage pn) = processIdUsage pn
+makeFinalValuePart (TupleSelect pn i) = processTupleSelect pn i
 
--- generateConfiguration :: ParseResult -> ConfigListRaw -> Int -> App r u Configuration
--- generateConfiguration pr configs rand = do
---   emptyC <- (lift . lift) empty
---   foldM f emptyC configRaw
---   where
---     configRaw = configs !! rand
+processWith ::
+  ParameterName ->
+  (Maybe ParameterType -> ConfigurationM ValuePartProcessed -> ConfigurationM ValuePartProcessed) ->
+  ConfigurationM ValuePartProcessed
+processWith pn func = do
+  pr <- asks snd
+  pt <- parameterType pn
+  func pt $
+    case PR.getParameter pr pn of
+      Just p -> do
+        processParameter p
+        func pt err
+      _ -> err
+  where
+    err = throwError $ "processWith: Cannot resolve call to parameter " ++ pn.name
 
---     f :: Configuration -> (ParameterName, Int) -> App r u Configuration
---     f c x
---       | contains c (fst x) = return c
---       | otherwise = case PR.getParameter pr (fst x) of
---         Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
---         Just pa -> buildParameter pr configRaw c pa
+processIdUsage :: ParameterName -> ConfigurationM ValuePartProcessed
+processIdUsage pn = processWith pn tryWithPT
+  where
+    tryWithPT :: Maybe ParameterType -> ConfigurationM ValuePartProcessed -> ConfigurationM ValuePartProcessed
+    tryWithPT pt else' = case pt of
+      Just SingleT -> do
+        param <- getSingleParameter pn
+        return $ Simple param.selectedValue.value.value
+      Just MultiT -> do
+        param <- getMultiParameter pn
+        return . Several pn . toList $ fmap (.value) param.selectedValue.value
+      _ -> else'
+
+processTupleSelect :: ParameterName -> Int -> ConfigurationM ValuePartProcessed
+processTupleSelect pn i = processWith pn tryWithPT
+  where
+    tryWithPT :: Maybe ParameterType -> ConfigurationM ValuePartProcessed -> ConfigurationM ValuePartProcessed
+    tryWithPT pt else' = case pt of
+      Just SingleTupleT -> do
+        param <- getSingleTupleParameter pn
+        x <- liftEither $ tupleLookup param.selectedValue.value i
+        return $ Simple x.value
+      Just MultiTupleT -> do
+        param <- getMultiTupleParameter pn
+        selectedValues <- liftEither $ mapM (`tupleLookup` i) param.selectedValue.value
+        return . Several pn . toList $ fmap (.value) selectedValues
+      _ -> else'
+
+checkMultiUsageRequirements :: ParameterName -> ConfigurationM ()
+checkMultiUsageRequirements pn = do
+  pr <- asks snd
+  if PR.countValues pr pn == 1 then return () else throwError "It is not possible to use a multi or multi-tuple parameter inside of the definition of a parameter with a range of more than a single value"
 
 -- buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u Configuration
 -- buildParameter pr cr c p@(PR.Parameter n r)
@@ -255,11 +316,6 @@ makeFinalValuePart (StringPart s) = return s
 --     f (vsLocal, cLocal) rv = do
 --       (v, cLocal') <- buildRegularValue pr cr cLocal rv
 --       return (vsLocal ++ [v], cLocal')
-
--- checkMultiParamUsageReqs :: ParseResult -> PR.Parameter -> Bool
--- checkMultiParamUsageReqs pr (PR.Parameter n (PR.Single _)) =
---   PR.countValues pr n == 1
--- checkMultiParamUsageReqs _ _ = False
 
 -- makeFinal :: ParseResult -> ConfigRaw -> Configuration -> [ValuePart] -> App r u (String, Configuration)
 -- makeFinal pr cr c = foldM f ("", c)

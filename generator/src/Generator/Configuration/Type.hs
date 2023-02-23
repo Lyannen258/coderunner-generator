@@ -10,15 +10,19 @@ import Control.Monad.State
 import Generator.Atoms
 import Generator.ParseResult.Type (ParseResult)
 
-newtype ParseResultFinal x = ParseResultFinal
-  {unParseResultFinal :: ReaderT ParseResult (StateT Configuration (Either String)) x}
+type ConfigListRaw = [ConfigRaw]
+
+newtype ConfigRaw = ConfigRaw {config :: [(ParameterName, Int)]}
+
+newtype ConfigurationM x = ConfigurationM
+  {unConfigurationM :: ReaderT (ConfigRaw, ParseResult) (StateT Configuration (Either String)) x}
   deriving
     ( Functor,
       Applicative,
       Monad,
       MonadState Configuration,
       MonadError String,
-      MonadReader ParseResult
+      MonadReader (ConfigRaw, ParseResult)
     )
 
 data Configuration = Configuration

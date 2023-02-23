@@ -2,9 +2,8 @@ module Generator.Main (main) where
 
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (except)
-import Control.Monad.Trans.Reader (asks)
+import Control.Monad.Except (liftEither)
+import Control.Monad.Reader (asks)
 import Generator.App (App)
 import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
 import Generator.Globals
@@ -22,9 +21,9 @@ main = do
   createOutputDirectory
 
   parser <- asks getParser
-  (ret, u) <- lift . except $ parser fileContent
+  (ret, u) <- liftEither $ parser fileContent
   debugOutput ret
-  parseResult <- lift . except $ toParseResult ret
+  parseResult <- liftEither $ toParseResult ret
   debugOutput parseResult
 
   maxFlagActive <- asks getMaxConfigurations
@@ -49,7 +48,7 @@ mainConfigurations parseResult u = do
   configs <- computeConfigurations parseResult
 
   generator <- asks getGenerator
-  results <- lift . except $ generator configs u
+  results <- liftEither $ generator configs u
   writeResult results
 
   printLn $ "Generated " ++ (show . length) configs ++ " variants"

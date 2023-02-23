@@ -14,10 +14,8 @@ import Control.Monad.State
 import Data.Foldable (foldl', toList)
 import Data.List (nub)
 import Data.Maybe (catMaybes)
-import Data.Sequence (Seq)
-import Data.Sequence qualified as Seq
+import qualified Data.Sequence as Seq
 import Generator.Atoms
-import Generator.Helper (maybeToEither)
 import Generator.ParseResult.Info
 import Generator.ParseResult.Type
 

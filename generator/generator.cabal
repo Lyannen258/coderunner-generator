@@ -53,5 +53,7 @@ library
       FlexibleInstances,
       OverloadedRecordDot,
       DuplicateRecordFields,
-      RankNTypes
+      RankNTypes,
+      ImportQualifiedPost,
+      FlexibleContexts
   ghc-options: -Wall

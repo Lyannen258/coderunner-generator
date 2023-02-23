@@ -14,7 +14,7 @@ where
 
 import Generator.Configuration.Internal
 import Generator.Configuration.Type
-import Generator.Helper (maybeToEither, singleton)
+import Generator.Helper (maybeToError, singleton)
 import Generator.Atoms (ParameterName)
 import Lens.Micro ((^.))
 import Text.Read (readMaybe)

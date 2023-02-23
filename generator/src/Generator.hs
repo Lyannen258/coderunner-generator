@@ -1,7 +1,8 @@
 module Generator (run) where
 
-import Control.Monad.Trans.Except (runExceptT)
-import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.Reader (runReaderT)
+import Generator.App (App (unApp))
 import qualified Generator.CmdArgs as CmdArgs
 import Generator.Configuration (Configuration)
 import Generator.Globals (constructGlobals)
@@ -23,7 +24,7 @@ run :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s ->
 run parser generator = do
   args <- CmdArgs.executeParser
   let g = constructGlobals parser generator args
-  res <- runExceptT (runReaderT main g)
+  res <- runExceptT (runReaderT (unApp main) g)
   case res of
     Left s -> putStrLn $ "Error: " ++ s
     Right _ -> return ()

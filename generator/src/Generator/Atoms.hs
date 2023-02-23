@@ -2,7 +2,7 @@ module Generator.Atoms
   ( ParameterName (..),
     Range (..),
     AtomicValue (..),
-    IncompleteAtomicValue(..),
+    IncompleteAtomicValue (..),
     ValuePart (..),
     makeSingleRange,
     makeSingleTupleRange,
@@ -16,11 +16,11 @@ module Generator.Atoms
     SingleValue (..),
     SingleTupleValue (..),
     MultiValue (..),
-    MultiTupleValue (..)
+    MultiTupleValue (..),
+    tupleLookup
   )
 where
 
-import Data.Foldable (toList)
 import Data.Sequence as Seq
 
 newtype ParameterName = ParameterName {name :: String}
@@ -44,6 +44,11 @@ newtype SingleValue a = SV {value :: a}
 
 newtype SingleTupleValue a = STV {value :: Seq a}
   deriving (Show, Eq)
+
+tupleLookup :: Seq a -> Int -> Either String a
+tupleLookup s i = case Seq.lookup i s of
+  Just v -> return v
+  _ -> Left "Index out of bounds"
 
 newtype MultiValue a = MV {value :: Seq a}
   deriving (Show, Eq)
