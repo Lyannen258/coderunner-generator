@@ -1,6 +1,6 @@
 module Generator.Main (main) where
 
-import Control.Monad (unless, when)
+import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except)
@@ -9,6 +9,7 @@ import Generator.App (App)
 import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
 import Generator.Globals
 import Generator.Helper (printLn)
+import Generator.Interactive (chooseConfig)
 import Generator.ParseResult (ParseResult)
 import Generator.ToParseResult (ToParseResult (toParseResult))
 import System.Directory (createDirectoryIfMissing)

@@ -27,7 +27,8 @@ library
       Generator.App,
       Generator.Globals,
       Generator.CmdArgs,
-      Generator.Main
+      Generator.Main,
+      Generator.Interactive
   
   build-depends:
       base,
@@ -44,10 +45,12 @@ library
       split,
       optparse-applicative,
       random,
-      HUnit
+      HUnit,
+      extra
 
   hs-source-dirs: src
   default-language: Haskell2010
   default-extensions: 
-      FlexibleInstances
+      FlexibleInstances,
+      ImportQualifiedPost
   ghc-options: -Wall

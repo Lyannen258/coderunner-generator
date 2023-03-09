@@ -6,11 +6,12 @@ module Generator.Globals
     getTemplateFilePath,
     getDebugOutputFlag,
     getAmount,
-    getMaxConfigurations
+    getMaxConfigurations,
+    getInteractive
   )
 where
 
-import Generator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations))
+import Generator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations, interactive))
 import Generator.Configuration
 
 data Globals r u = Globals
@@ -39,3 +40,6 @@ getAmount = amount . args
 
 getMaxConfigurations :: Globals r u -> Bool
 getMaxConfigurations = maxConfigurations . args
+
+getInteractive :: Globals r u -> Bool
+getInteractive = interactive . args

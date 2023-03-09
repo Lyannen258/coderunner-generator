@@ -20,22 +20,22 @@ data Parameter = Parameter
   deriving (Show)
 
 data ValueComponent = Single SingleComponent | Multi MultiComponent
-  deriving (Show)
+  deriving (Show, Eq)
 
 data SingleComponent = SingleComponent
   { _singleComponentSelectedValue :: Value,
     _singleComponentAllValues :: [Value]
   }
-  deriving (Show)
+  deriving (Show, Eq)
 
 data MultiComponent = MultiComponent
   { _multiComponentSelectedValueRange :: [Value],
     _multiComponentAllValueRanges :: [[Value]]
   }
-  deriving (Show)
+  deriving (Show, Eq)
 
 data Value = Regular String | Tuple [String]
-  deriving (Show)
+  deriving (Show, Eq)
 
 tupleInsideAnotherValue :: String
 tupleInsideAnotherValue =

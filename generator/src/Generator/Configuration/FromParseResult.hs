@@ -1,6 +1,6 @@
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
-import Control.Monad (foldM, when)
+import Control.Monad.Extra (foldM, forM, ifM, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (catchE, except, throwE)
@@ -9,17 +9,18 @@ import Data.Foldable (find, foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Generator.App
 import Generator.Configuration as C
 import Generator.Configuration.Internal as C
 import Generator.Configuration.Type
-import Generator.Globals (getAmount)
+import Generator.Globals (getAmount, getInteractive)
 import Generator.Helper (maybeToEither, printLn, singleton)
+import Generator.Interactive
 import Generator.ParameterName
-import qualified Generator.ParseResult.Info as PR
+import Generator.ParseResult.Info qualified as PR
 import Generator.ParseResult.Type (Constraint, ParseResult, ValuePart)
-import qualified Generator.ParseResult.Type as PR
+import Generator.ParseResult.Type qualified as PR
 import System.Random (RandomGen, getStdGen, uniformR)
 
 type ConfigListRaw = [[(ParameterName, Int)]]
@@ -42,9 +43,16 @@ computeConfigurations pr = do
     combs -> do
       let withoutForbidden = removeForbidden pr combs
       amount <- evaluateRequestedAmount (length withoutForbidden)
-      randoms <- getRandomNumbers amount (length withoutForbidden)
-      let configurations = map (generateConfiguration pr withoutForbidden) randoms
-      sequence configurations
+      configs <- mapM (generateConfiguration pr) withoutForbidden
+      ifM
+        (asks getInteractive)
+        (forM [1 .. amount] $ \i -> do liftIO $ putStrLn ("\nSpecify variant " ++ show i ++ ":\n"); chooseConfig configs)
+        (chooseRandoms amount configs)
+
+chooseRandoms :: Int -> [Configuration] -> App r u [Configuration]
+chooseRandoms amount configs = do
+  randoms <- getRandomNumbers amount (length configs)
+  return $ map (configs !!) randoms
 
 allCombinations :: ParseResult -> ConfigListRaw
 allCombinations pr =
@@ -82,7 +90,11 @@ removeForbidden pr = filter f
 evaluateRequestedAmount :: Int -> App r u Int
 evaluateRequestedAmount maxAmount = do
   amountMaybe <- asks getAmount
-  let amount = fromMaybe maxAmount amountMaybe
+  amount <-
+    ifM
+      (asks getInteractive)
+      (return $ fromMaybe 1 amountMaybe)
+      (return $ fromMaybe maxAmount amountMaybe)
   printAttemptedAmount amount maxAmount
   return (min amount maxAmount)
 
@@ -112,39 +124,37 @@ getNDistinct amountNumbers amountConfigs = fillToN []
     fillToN acc std
       | length (nub acc) >= min amountNumbers amountConfigs = nub acc
       | otherwise =
-        let (rand, newGen) = uniformR (0, amountConfigs - 1) std
-         in fillToN (rand : acc) newGen
+          let (rand, newGen) = uniformR (0, amountConfigs - 1) std
+           in fillToN (rand : acc) newGen
 
-generateConfiguration :: ParseResult -> ConfigListRaw -> Int -> App r u Configuration
-generateConfiguration pr configs rand = do
+generateConfiguration :: ParseResult -> ConfigRaw -> App r u Configuration
+generateConfiguration pr cRaw = do
   emptyC <- (lift . lift) empty
-  foldM f emptyC configRaw
+  foldM f emptyC cRaw
   where
-    configRaw = configs !! rand
-
     f :: Configuration -> (ParameterName, Int) -> App r u Configuration
     f c x
       | contains c (fst x) = return c
       | otherwise = case PR.getParameter pr (fst x) of
-        Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
-        Just pa -> buildParameter pr configRaw c pa
+          Nothing -> lift . except . Left $ "Parameter " ++ (unParameterName . fst $ x) ++ " not found."
+          Just pa -> buildParameter pr cRaw c pa
 
 buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u Configuration
 buildParameter pr cr c p@(PR.Parameter n r)
   | PR.containsMultiParamUsage pr n =
-    if checkMultiParamUsageReqs pr p
-      then do
-        (vs, newC) <- buildWithMultiParamUsage pr cr c p
-        let p' = Parameter n $ Multi $ MultiComponent vs [vs]
-        return $ C.addParameter newC p'
-      else (lift . throwE) incorrectUsageOfMultiParam
+      if checkMultiParamUsageReqs pr p
+        then do
+          (vs, newC) <- buildWithMultiParamUsage pr cr c p
+          let p' = Parameter n $ Multi $ MultiComponent vs [vs]
+          return $ C.addParameter newC p'
+        else (lift . throwE) incorrectUsageOfMultiParam
   | otherwise = do
-    (_, i) <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
-    case r of
-      PR.Single (PR.SingleRange vs) -> buildSingleParameter pr cr c n i vs
-      PR.SingleTuple (PR.SingleTupleRange vs) -> buildSingleTupleParameter pr cr c n i vs
-      PR.Multi (PR.MultiRange vs) -> buildMultiParameter pr cr c n i vs
-      PR.MultiTuple (PR.MultiTupleRange vs) -> buildMultiTupleParameter pr cr c n i vs
+      (_, i) <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
+      case r of
+        PR.Single (PR.SingleRange vs) -> buildSingleParameter pr cr c n i vs
+        PR.SingleTuple (PR.SingleTupleRange vs) -> buildSingleTupleParameter pr cr c n i vs
+        PR.Multi (PR.MultiRange vs) -> buildMultiParameter pr cr c n i vs
+        PR.MultiTuple (PR.MultiTupleRange vs) -> buildMultiTupleParameter pr cr c n i vs
 
 buildSingleParameter :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> Seq PR.RegularValue -> App r u Configuration
 buildSingleParameter pr cr c pn i rvs = do

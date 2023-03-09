@@ -8,7 +8,8 @@ data Args = Args
   { templateFile :: String,
     amount :: Maybe Int,
     debugOutput :: Bool,
-    maxConfigurations :: Bool
+    maxConfigurations :: Bool,
+    interactive :: Bool
   }
   deriving (Show)
 
@@ -26,6 +27,7 @@ parser =
     <*> optional amountParser
     <*> debugParser
     <*> maxParser
+    <*> interactiveParser
 
 templateFileParser :: Parser String
 templateFileParser =
@@ -55,6 +57,13 @@ maxParser =
     long "max"
       <> short 'm'
       <> help "Return the maximum amount of variants possible with the given template file"
+
+interactiveParser :: Parser Bool
+interactiveParser =
+  switch $
+    long "interactive"
+      <> short 'i'
+      <> help "Choose a value for each parameter manually"
 
 -- * Execution function
 
