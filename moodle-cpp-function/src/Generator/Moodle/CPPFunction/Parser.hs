@@ -7,6 +7,7 @@ import Generator.ParameterParser.AST (ParameterAST)
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import Generator.Atoms (ParameterName(ParameterName))
 
 -- * Interface
 
@@ -154,7 +155,7 @@ stringOutputParser =
 
 parameterUsageParser :: Parser Output
 parameterUsageParser = do
-  i <- identifierParser
+  i <- ParameterName <$> identifierParser
   cp <- (optional . try) callPartParser
   return $ Parameter $ ParameterUsage placeholder i cp
 

@@ -2,15 +2,15 @@ module Generator.Moodle.CPPFunction.Generator (generate) where
 
 import Generator.Moodle.CPPFunction.AbstractSyntaxTree
 import Generator.Helper
-import Generator.Configuration
+import Generator.Configuration 
 import Control.Monad (foldM)
 import Data.List (foldl', intercalate, nub)
 import Lens.Micro ((^.))
 import Text.XML.Light
-import Generator.ParameterName (mkParameterName)
+import Generator.Atoms (ParameterName (..))
 
-valueNotFoundErr :: String -> String
-valueNotFoundErr p = "No value found for usage of parameter '" ++ p ++ "'"
+valueNotFoundErr :: ParameterName -> String
+valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
 
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
@@ -54,9 +54,9 @@ generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCas
               findMultiParams conf (tc ^. code)
                 ++ findMultiParams conf (tc ^. outcome)
 
-          getParamValueTuples :: String -> Either String [(String, String)]
+          getParamValueTuples :: ParameterName -> Either String [(ParameterName, String)]
           getParamValueTuples parameterName = do
-            multiParamValues <- maybeToEither (getMultiValue conf (mkParameterName parameterName)) shouldNotHappenErr
+            multiParamValues <- maybeToError (getMultiValue conf parameterName) shouldNotHappenErr
             return [(parameterName, v) | v <- multiParamValues]
        in do
             paramValueTuples <- mapM getParamValueTuples multiParams
@@ -75,34 +75,34 @@ combinations = foldl' f []
     f [] l = map singleton l
     f acc l = [a ++ [b] | a <- acc, b <- l]
 
-findMultiParams :: Configuration -> [SectionBodyComponent] -> [String]
+findMultiParams :: Configuration -> [SectionBodyComponent] -> [ParameterName]
 findMultiParams conf = foldr f []
   where
-    f :: SectionBodyComponent -> [String] -> [String]
-    f (OutputComponent (Parameter (ParameterUsage _ name _))) acc =
-      case getMultiValue conf (mkParameterName name) of
-        Just _ -> acc ++ [name]
+    f :: SectionBodyComponent -> [ParameterName] -> [ParameterName]
+    f (OutputComponent (Parameter (ParameterUsage _ n _))) acc =
+      case getMultiValue conf n of
+        Just _ -> acc ++ [n]
         Nothing -> acc
     f _ acc = acc
 
-generateMultiSection :: Configuration -> [[(String, String)]] -> [SectionBodyComponent] -> Either String [String]
+generateMultiSection :: Configuration -> [[(ParameterName, String)]] -> [SectionBodyComponent] -> Either String [String]
 generateMultiSection config combs sbcs
   | (not . null) combs = mapM f combs
   | otherwise = singleton <$> f []
   where
-    f :: [(String, String)] -> Either String String
+    f :: [(ParameterName, String)] -> Either String String
     f comb = foldM (buildSBC comb) "" sbcs
 
-    buildSBC :: [(String, String)] -> String -> SectionBodyComponent -> Either String String
+    buildSBC :: [(ParameterName, String)] -> String -> SectionBodyComponent -> Either String String
     buildSBC _ acc (TextComponent s) = return (acc ++ s)
     buildSBC _ acc (OutputComponent (TextConstant s)) = return (acc ++ s)
     buildSBC _ acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        vs <- evaluateMethod config (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod config name (cp ^. identifier) (cp ^. arguments)
         return $ acc ++ intercalate "\n" vs
     buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue config (mkParameterName name) of
+        value <- case getSingleValue config name of
           Just s -> return s
           Nothing -> case lookup name comb of
             Just ss -> return ss
@@ -117,13 +117,13 @@ generateSection conf = foldM f ""
     f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
     f acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
       do
-        vs <- evaluateMethod conf (mkParameterName name) (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod conf name (cp ^. identifier) (cp ^. arguments)
         return $ acc ++ intercalate "\n" vs
     f acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
       do
-        value <- case getSingleValue conf (mkParameterName name) of
+        value <- case getSingleValue conf name of
           Just s -> return s
-          Nothing -> case getMultiValue conf (mkParameterName name) of
+          Nothing -> case getMultiValue conf name of
             Just ss -> return $ intercalate "\n" ss
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value

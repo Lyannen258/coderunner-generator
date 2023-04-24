@@ -30,8 +30,8 @@ hlexeme = L.lexeme hwhitespace
 requiresParser :: Parser String
 requiresParser = lexeme (string "requires")
 
-identifierParser :: Parser ParameterName
-identifierParser = ParameterName <$> lexeme (some (letterChar <|> char '-' <|> char '_'))
+identifierParser :: Parser String
+identifierParser = lexeme (some (letterChar <|> char '-' <|> char '_'))
 
 parameterHeadlineParser :: Parser String
 parameterHeadlineParser = hlexeme (string "Parameter:" <* eol)

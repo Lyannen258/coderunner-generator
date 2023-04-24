@@ -27,7 +27,8 @@ parameterStatementParser stopParser = do
 
 parameterPartParser :: Parser ParameterPart
 parameterPartParser = do
-  i <- identifierParser
+  is <- identifierParser
+  let i = ParameterName is
   _ <- openParenth
   valueRange <- valueRangeParser
   _ <- closingParenth
@@ -118,11 +119,11 @@ idUsageOrTupleSelectValuePartParser = do
 
 idUsageValuePartParser :: Parser ValuePart
 idUsageValuePartParser = do
-  IdUsage <$> identifierParser
+  IdUsage . ParameterName <$> identifierParser
 
 tupleSelectValuePartParser :: Parser ValuePart
 tupleSelectValuePartParser = do
-  i <- identifierParser
+  i <- ParameterName <$> identifierParser
   _ <- point
   _ <- string "get"
   _ <- openParenth

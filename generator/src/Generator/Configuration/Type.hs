@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
 module Generator.Configuration.Type where
 
@@ -26,13 +25,21 @@ newtype ConfigurationM x = ConfigurationM
     )
 
 data Configuration = Configuration
-  { singleParameters :: [Parameter SingleValue AtomicValue],
-    singleTupleParameters :: [Parameter SingleTupleValue AtomicValue],
-    multiParameters :: [Parameter MultiValue AtomicValue],
-    multiTupleParameters :: [Parameter MultiTupleValue AtomicValue],
+  { singleParameters :: [SingleParameter],
+    singleTupleParameters :: [SingleTupleParameter],
+    multiParameters :: [MultiParameter],
+    multiTupleParameters :: [MultiTupleParameter],
     randomNumbers :: [Int]
   }
   deriving (Show)
+
+type SingleParameter = Parameter SingleValue AtomicValue
+
+type MultiParameter = Parameter MultiValue AtomicValue
+
+type SingleTupleParameter = Parameter SingleTupleValue AtomicValue
+
+type MultiTupleParameter = Parameter MultiTupleValue AtomicValue
 
 data Parameter v a = Parameter
   { name :: ParameterName,

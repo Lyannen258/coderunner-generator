@@ -1,10 +1,14 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE TupleSections #-}
 
+{-# HLINT ignore "Use first" #-}
 
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Trans.Maybe (maybeToExceptT)
 import Data.Foldable (Foldable (toList), foldl')
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
@@ -144,6 +148,28 @@ processSingle :: ParameterName -> SingleRange IncompleteAtomicValue -> Configura
 processSingle n sr = do
   let vs = fmap (.value) sr.range
   newValues <- mapM makeFinalAtomicValue vs
+  if hasMultiParamRef newValues
+    then processSingleWithMultiParamRef n newValues
+    else processSingleDefault n (fmap head newValues)
+
+hasMultiParamRef :: Seq.Seq [a] -> Bool
+hasMultiParamRef = any p
+  where
+    p [_] = False
+    p _ = True
+
+processSingleWithMultiParamRef :: ParameterName -> Seq.Seq [AtomicValue] -> ConfigurationM ()
+processSingleWithMultiParamRef n values
+  | length values == 1 = do
+      valueRange <- maybeToError (Seq.lookup 0 values) "processSingleWithMultiParamRef: Empty value range."
+      let selectedValue = Seq.fromList valueRange
+      let valueRange' = Seq.singleton selectedValue
+      let mvvalues = fmap MV valueRange'
+      addMultiParameter $ Parameter n (MV selectedValue) (RangeType mvvalues)
+  | otherwise = throwError "processSingleWithMultiParamRef: Reference of multi parameter inside of another parameter. The referencing parameter has more than one value in the value range."
+
+processSingleDefault :: ParameterName -> Seq.Seq AtomicValue -> ConfigurationM ()
+processSingleDefault n newValues = do
   let newSValues = fmap SV newValues
   index <- getSelection n
   selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
@@ -152,7 +178,7 @@ processSingle n sr = do
 processSingleTuple :: ParameterName -> SingleTupleRange IncompleteAtomicValue -> ConfigurationM ()
 processSingleTuple n str = do
   let vs = fmap (.value) str.range
-  newValues <- (mapM . mapM) makeFinalAtomicValue vs
+  newValues <- (mapM . mapM) makeFinalAtomicValueNoMulti vs
   let newSTValues = fmap STV newValues
   index <- getSelection n
   selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
@@ -161,7 +187,7 @@ processSingleTuple n str = do
 processMulti :: ParameterName -> MultiRange IncompleteAtomicValue -> ConfigurationM ()
 processMulti n str = do
   let vs = fmap (.value) str.range
-  newValues <- (mapM . mapM) makeFinalAtomicValue vs
+  newValues <- (mapM . mapM) makeFinalAtomicValueNoMulti vs
   let newMValues = fmap MV newValues
   index <- getSelection n
   selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
@@ -170,22 +196,38 @@ processMulti n str = do
 processMultiTuple :: ParameterName -> MultiTupleRange IncompleteAtomicValue -> ConfigurationM ()
 processMultiTuple n str = do
   let vs = fmap (.value) str.range
-  newValues <- (mapM . mapM . mapM) makeFinalAtomicValue vs
-  checkMultiUsageRequirements
+  newValues <- (mapM . mapM . mapM) makeFinalAtomicValueNoMulti vs
   let newMValues = fmap MTV newValues
   index <- getSelection n
   selectedValue <- maybeToError (Seq.lookup index newValues) "processSingle: Index out of bounds"
   addMultiTupleParameter $ Parameter n (MTV selectedValue) (RangeType newMValues)
 
-makeFinalAtomicValue :: IncompleteAtomicValue -> ConfigurationM (Either AtomicValue [AtomicValue])
+makeFinalAtomicValueNoMulti ::
+  IncompleteAtomicValue -> ConfigurationM AtomicValue
+makeFinalAtomicValueNoMulti iav = do
+  x <- makeFinalAtomicValue iav
+  case x of
+    [single] -> return single
+    _ -> throwError "makeFinalAtomicValueNoMulti: contains multi parameter reference"
+
+makeFinalAtomicValue :: IncompleteAtomicValue -> ConfigurationM [AtomicValue]
 makeFinalAtomicValue iav = do
   parts <- mapM makeFinalValuePart iav.parts
-  avs <- foldM f [] parts
+  let avs = foldl' f ([AtomicValue ""], []) parts
+  return $ fst avs
   where
-    f :: 
+    f acc (Simple s) = (map (\v -> AtomicValue $ v.value ++ s) (fst acc), snd acc)
+    f acc (Several n ss)
+      | n `elem` snd acc && length (fst acc) == length ss -- This actually not enough! Incorrect behaviour!
+        =
+          (map AtomicValue $ zipWith (++) (map (.value) (fst acc)) ss, snd acc)
+      | otherwise = combineValues acc ss
 
-data ValuePartProcessed =
-  Simple String
+combineValues :: ([AtomicValue], b) -> [String] -> ([AtomicValue], b)
+combineValues acc ss = ([AtomicValue $ av.value ++ s | av <- fst acc, s <- ss], snd acc)
+
+data ValuePartProcessed
+  = Simple String
   | Several ParameterName [String] -- Origin and values
 
 makeFinalValuePart :: ValuePart -> ConfigurationM ValuePartProcessed
@@ -215,10 +257,10 @@ processIdUsage pn = processWith pn tryWithPT
     tryWithPT :: Maybe ParameterType -> ConfigurationM ValuePartProcessed -> ConfigurationM ValuePartProcessed
     tryWithPT pt else' = case pt of
       Just SingleT -> do
-        param <- getSingleParameter pn
+        param <- getSingleParameterM pn
         return $ Simple param.selectedValue.value.value
       Just MultiT -> do
-        param <- getMultiParameter pn
+        param <- getMultiParameterM pn
         return . Several pn . toList $ fmap (.value) param.selectedValue.value
       _ -> else'
 
@@ -228,11 +270,11 @@ processTupleSelect pn i = processWith pn tryWithPT
     tryWithPT :: Maybe ParameterType -> ConfigurationM ValuePartProcessed -> ConfigurationM ValuePartProcessed
     tryWithPT pt else' = case pt of
       Just SingleTupleT -> do
-        param <- getSingleTupleParameter pn
+        param <- getSingleTupleParameterM pn
         x <- liftEither $ tupleLookup param.selectedValue.value i
         return $ Simple x.value
       Just MultiTupleT -> do
-        param <- getMultiTupleParameter pn
+        param <- getMultiTupleParameterM pn
         selectedValues <- liftEither $ mapM (`tupleLookup` i) param.selectedValue.value
         return . Several pn . toList $ fmap (.value) selectedValues
       _ -> else'

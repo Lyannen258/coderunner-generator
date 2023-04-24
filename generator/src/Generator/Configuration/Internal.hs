@@ -13,6 +13,7 @@ import Generator.ParseResult.Type qualified as PR
 import Lens.Micro ((^.))
 import System.Random (getStdGen, randoms)
 import Text.Read (readMaybe)
+import qualified Data.Sequence as Seq
 
 empty :: IO Configuration
 empty = do
@@ -25,25 +26,25 @@ getSelection pn = do
     Nothing -> throwError ("getSelection: Parameter" ++ pn.name ++ " does not exist in ConfigRaw")
     Just i -> return i
 
-addSingleParameter :: Parameter SingleValue AtomicValue -> ConfigurationM ()
+addSingleParameter :: SingleParameter -> ConfigurationM ()
 addSingleParameter p = do
   c <- get
   put $ c {singleParameters = c.singleParameters ++ [p]}
   return ()
 
-addSingleTupleParameter :: Parameter SingleTupleValue AtomicValue -> ConfigurationM ()
+addSingleTupleParameter :: SingleTupleParameter -> ConfigurationM ()
 addSingleTupleParameter p = do
   c <- get
   put $ c {singleTupleParameters = c.singleTupleParameters ++ [p]}
   return ()
 
-addMultiParameter :: Parameter MultiValue AtomicValue -> ConfigurationM ()
+addMultiParameter :: MultiParameter -> ConfigurationM ()
 addMultiParameter p = do
   c <- get
   put $ c {multiParameters = c.multiParameters ++ [p]}
   return ()
 
-addMultiTupleParameter :: Parameter MultiTupleValue AtomicValue -> ConfigurationM ()
+addMultiTupleParameter :: MultiTupleParameter -> ConfigurationM ()
 addMultiTupleParameter p = do
   c <- get
   put $ c {multiTupleParameters = c.multiTupleParameters ++ [p]}
@@ -65,32 +66,50 @@ parameterType pn = do
       Just _ -> Just ret
       Nothing -> Nothing
 
-getSingleParameter :: (MonadState Configuration m, MonadError String m) => ParameterName -> m (Parameter SingleValue AtomicValue)
-getSingleParameter pn = do
+getSingleParameter :: ParameterName -> Configuration -> Maybe SingleParameter
+getSingleParameter pn c = findParameter c.singleParameters pn
+
+getSingleParameterM :: (MonadState Configuration m, MonadError String m) => ParameterName -> m SingleParameter
+getSingleParameterM pn = do
   c <- get
-  maybeToError (findParameter c.singleParameters pn) $
+  maybeToError (getSingleParameter pn c) $
     "getSingleParameter: " ++ pn.name ++ " is not a single parameter or does not exist"
 
-getMultiParameter :: (MonadState Configuration m, MonadError String m) => ParameterName -> m (Parameter MultiValue AtomicValue)
-getMultiParameter pn = do
+getMultiParameter :: ParameterName -> Configuration -> Maybe MultiParameter
+getMultiParameter pn c = findParameter c.multiParameters pn
+
+getMultiParameterM :: (MonadState Configuration m, MonadError String m) => ParameterName -> m MultiParameter
+getMultiParameterM pn = do
   c <- get
-  maybeToError (findParameter c.multiParameters pn) $
+  maybeToError (getMultiParameter pn c) $
     "getMultiParameter: " ++ pn.name ++ " is not a multi parameter or does not exist"
 
-getSingleTupleParameter :: (MonadState Configuration m, MonadError String m) => ParameterName -> m (Parameter SingleTupleValue AtomicValue)
-getSingleTupleParameter pn = do
+getSingleTupleParameter :: ParameterName -> Configuration -> Maybe SingleTupleParameter
+getSingleTupleParameter pn c = findParameter c.singleTupleParameters pn
+
+getSingleTupleParameterM :: (MonadState Configuration m, MonadError String m) => ParameterName -> m SingleTupleParameter
+getSingleTupleParameterM pn = do
   c <- get
-  maybeToError (findParameter c.singleTupleParameters pn) $
+  maybeToError (getSingleTupleParameter pn c) $
     "getSingleTupleParameter: " ++ pn.name ++ " is not a single-tuple parameter or does not exist"
 
-getMultiTupleParameter :: (MonadState Configuration m, MonadError String m) => ParameterName -> m (Parameter MultiTupleValue AtomicValue)
-getMultiTupleParameter pn = do
+getMultiTupleParameter :: ParameterName -> Configuration -> Maybe MultiTupleParameter
+getMultiTupleParameter pn c = findParameter c.multiTupleParameters pn
+
+getMultiTupleParameterM :: (MonadState Configuration m, MonadError String m) => ParameterName -> m MultiTupleParameter
+getMultiTupleParameterM pn = do
   c <- get
-  maybeToError (findParameter c.multiTupleParameters pn) $
+  maybeToError (getMultiTupleParameter pn c) $
     "getMultiTupleParameter: " ++ pn.name ++ " is not a multi-tuple parameter or does not exist"
 
 findParameter :: [Parameter v a] -> ParameterName -> Maybe (Parameter v a)
 findParameter ps pn = find (\p -> p.name == pn) ps
+
+getValueByIndexSingle :: SingleTupleParameter -> Int -> Maybe AtomicValue
+getValueByIndexSingle stp i = Seq.lookup i stp.selectedValue.value
+
+getValueByIndexMulti :: MultiTupleParameter -> Int -> Maybe (Seq.Seq AtomicValue)
+getValueByIndexMulti mtp i = Seq.lookup i mtp.selectedValue.value
 
 -- getParameter :: Configuration -> ParameterName -> Maybe Parameter
 -- getParameter c pn = find f (parameters c)
@@ -129,12 +148,12 @@ findParameter ps pn = find (\p -> p.name == pn) ps
 --   where
 --     vc = getValueComponent conf pn
 
--- noMatchingMethodErr :: String -> [String] -> String
--- noMatchingMethodErr m args =
---   "There is no method with the name '"
---     ++ m
---     ++ "' and parameters "
---     ++ intercalate ", " args
+noMatchingMethodErr :: String -> [String] -> String
+noMatchingMethodErr m args =
+  "There is no method with the name '"
+    ++ m
+    ++ "' and parameters "
+    ++ intercalate ", " args
 
 -- paramNotSetErr :: ParameterName -> String
 -- paramNotSetErr pn =
