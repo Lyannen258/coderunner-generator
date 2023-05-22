@@ -11,7 +11,7 @@ library
       Generator.ParseResult,
       Generator,
       Generator.ParserUtils,
-      Generator.ParameterName,
+      Generator.Atoms,
       Generator.ParameterParser.AST,
       Generator.ParameterParser,
 
@@ -46,11 +46,17 @@ library
       optparse-applicative,
       random,
       HUnit,
-      extra
+      extra,
+      mtl
 
   hs-source-dirs: src
   default-language: Haskell2010
   default-extensions: 
       FlexibleInstances,
-      ImportQualifiedPost
+      ImportQualifiedPost,
+      OverloadedRecordDot,
+      DuplicateRecordFields,
+      RankNTypes,
+      ImportQualifiedPost,
+      FlexibleContexts
   ghc-options: -Wall

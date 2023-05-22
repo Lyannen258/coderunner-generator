@@ -1,19 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
+
 module Generator.ParameterParser (parser) where
 
+import Data.Maybe (catMaybes)
+import Generator.Atoms
 import Generator.ParameterParser.AST
 import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import Data.Maybe (catMaybes)
 import Text.Read (readMaybe)
+import Control.Monad.Reader (ask)
+import Text.Megaparsec.Debug (dbg)
 
 -- * Main parsers
 
 parser :: Parser a -> Parser ParameterAST
 parser stopParser =
   ParameterAST
-    placeholder
     <$> many (parameterStatementParser stopParser)
 
 parameterStatementParser :: Parser a -> Parser ParameterStatement
@@ -22,91 +25,107 @@ parameterStatementParser stopParser = do
   firstParameterPart <- parameterPartParser
   secondParameterPart <- optional (requiresParser *> parameterPartParser)
   return $
-    ParameterStatement placeholder firstParameterPart secondParameterPart
+    ParameterStatement firstParameterPart secondParameterPart
 
 parameterPartParser :: Parser ParameterPart
 parameterPartParser = do
-  i <- identifierParser
+  is <- identifierParser
+  let i = ParameterName is
   _ <- openParenth
-  parameterPart <- valueListParser i
+  valueRange <- valueRangeParser
   _ <- closingParenth
-  return parameterPart
+  return $ ParameterPart i valueRange
 
-valueListParser :: String -> Parser ParameterPart
-valueListParser i =
-  (MultiParameterPart i <$> multiValueListParser)
-    <|> (SingleParameterPart i <$> singleValueListParser)
+valueRangeParser :: Parser (Range IncompleteAtomicValue)
+valueRangeParser = do
+  choice
+    [ fmap makeSingleRange singleRangeParser,
+      fmap makeSingleTupleRange singleTupleRangeParser,
+      fmap makeMultiRange multiRangeParser,
+      fmap makeMultiTupleRange multiTupleRangeParser
+    ]
 
-singleValueListParser :: Parser [ParameterValue]
-singleValueListParser = sepBy valueParser comma
+singleRangeParser :: Parser [IncompleteAtomicValue]
+singleRangeParser = sepBy1 regularValueParser comma
 
-multiValueListParser :: Parser [[ParameterValue]]
-multiValueListParser = sepBy1 valueRangeParser comma
+singleTupleRangeParser :: Parser [[IncompleteAtomicValue]]
+singleTupleRangeParser = sepBy1 tupleValueParser comma
 
-valueRangeParser :: Parser [ParameterValue]
-valueRangeParser =
-  openSquare *> singleValueListParser <* closingSquare
+multiRangeParser :: Parser [[IncompleteAtomicValue]]
+multiRangeParser = sepBy1 multiValueParser comma
 
-valueParser :: Parser ParameterValue
-valueParser = regularValueParser <|> tupleValueParser
+multiTupleRangeParser :: Parser [[[IncompleteAtomicValue]]]
+multiTupleRangeParser = sepBy1 multiTupleValueParser comma
 
-regularValueParser :: Parser ParameterValue
+-- multiValueListParser :: Parser [[AtomicValue]]
+-- multiValueListParser = sepBy1 valueRangeParser comma
+
+-- valueRangeParser :: Parser [AtomicValue]
+-- valueRangeParser =
+--   openSquare *> singleValueListParser <* closingSquare
+
+-- valueParser :: Parser AtomicValue
+-- valueParser = regularValueParser <|> tupleValueParser
+
+regularValueParser :: Parser IncompleteAtomicValue 
 regularValueParser = valueParserDouble <|> valueParserSingle
 
-valueParserDouble :: Parser ParameterValue
+valueParserDouble :: Parser IncompleteAtomicValue
 valueParserDouble = do
   _ <- openQuotes
   valueParts <- some $ valuePartParser closingQuotes
   _ <- closingQuotes
-  return $ Regular valueParts
+  return $ IncompleteAtomicValue valueParts
 
-valueParserSingle :: Parser ParameterValue
+valueParserSingle :: Parser IncompleteAtomicValue 
 valueParserSingle = do
   _ <- openSingle
   valueParts <- some $ valuePartParser closingSingle
   _ <- closingSingle
-  return $ Regular valueParts
+  return $ IncompleteAtomicValue valueParts
 
-tupleValueParser :: Parser ParameterValue
+tupleValueParser :: Parser [IncompleteAtomicValue]
 tupleValueParser = do
-  _ <- openParenth
-  regularValues <- singleValueListParser
-  _ <- closingParenth
-  let valueParts = map (\case
-        Regular pvps -> Just pvps
-        Tuple _ -> Nothing) regularValues
-  return $ Tuple (catMaybes valueParts)
+  openParenth *> singleRangeParser <* closingParenth
 
-valuePartParser :: Parser Char -> Parser ParameterValuePart
+multiValueParser :: Parser [IncompleteAtomicValue]
+multiValueParser =
+  openSquare *> singleRangeParser <* closingSquare
+
+multiTupleValueParser :: Parser [[IncompleteAtomicValue]]
+multiTupleValueParser =
+  openSquare *> sepBy tupleValueParser comma <* closingSquare
+
+valuePartParser :: Parser Char -> Parser ValuePart
 valuePartParser endParser =
   try (simpleValuePartParser endParser) <|> idUsageOrTupleSelectValuePartParser
 
-simpleValuePartParser :: Parser Char -> Parser ParameterValuePart
+simpleValuePartParser :: Parser Char -> Parser ValuePart
 simpleValuePartParser endParser = do
   notFollowedBy $ stringEndLookAhead endParser
   firstChar <- printChar
   rest <- manyTill printChar (stringEndLookAhead endParser)
-  return $ Simple (firstChar : rest)
+  return $ StringPart (firstChar : rest)
 
 stringEndLookAhead :: Parser Char -> Parser ()
 stringEndLookAhead endParser = do
   _ <- (try . lookAhead) (fmap (: []) endParser <|> openOutput)
   return ()
 
-idUsageOrTupleSelectValuePartParser :: Parser ParameterValuePart
+idUsageOrTupleSelectValuePartParser :: Parser ValuePart
 idUsageOrTupleSelectValuePartParser = do
   _ <- openOutput
-  pvp <- try tupleSelectValuePartParser <|> idUsageValuePartParser 
+  pvp <- try tupleSelectValuePartParser <|> idUsageValuePartParser
   _ <- closingOutput
   return pvp
 
-idUsageValuePartParser :: Parser ParameterValuePart
+idUsageValuePartParser :: Parser ValuePart
 idUsageValuePartParser = do
-  IdUsage <$> identifierParser
+  IdUsage . ParameterName <$> identifierParser
 
-tupleSelectValuePartParser :: Parser ParameterValuePart
+tupleSelectValuePartParser :: Parser ValuePart
 tupleSelectValuePartParser = do
-  i <- identifierParser
+  i <- ParameterName <$> identifierParser
   _ <- point
   _ <- string "get"
   _ <- openParenth

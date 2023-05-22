@@ -1,45 +1,49 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
 module Generator.Configuration.Type where
 
-import Generator.ParameterName (ParameterName)
-import Lens.Micro.TH (makeFields)
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.State
+import Generator.Atoms
+import Generator.ParseResult.Type (ParseResult)
+
+type ConfigListRaw = [ConfigRaw]
+
+newtype ConfigRaw = ConfigRaw {config :: [(ParameterName, Int)]}
+
+newtype ConfigurationM x = ConfigurationM
+  {unConfigurationM :: ReaderT (ConfigRaw, ParseResult) (StateT Configuration (Either String)) x}
+  deriving
+    ( Functor,
+      Applicative,
+      Monad,
+      MonadState Configuration,
+      MonadError String,
+      MonadReader (ConfigRaw, ParseResult)
+    )
 
 data Configuration = Configuration
-  { parameters :: [Parameter],
+  { singleParameters :: [SingleParameter],
+    singleTupleParameters :: [SingleTupleParameter],
+    multiParameters :: [MultiParameter],
+    multiTupleParameters :: [MultiTupleParameter],
     randomNumbers :: [Int]
   }
   deriving (Show)
 
-data Parameter = Parameter
+type SingleParameter = Parameter SingleValue AtomicValue
+
+type MultiParameter = Parameter MultiValue AtomicValue
+
+type SingleTupleParameter = Parameter SingleTupleValue AtomicValue
+
+type MultiTupleParameter = Parameter MultiTupleValue AtomicValue
+
+data Parameter v a = Parameter
   { name :: ParameterName,
-    valueComponent :: ValueComponent
+    selectedValue :: v a,
+    range :: RangeType v a
   }
   deriving (Show)
-
-data ValueComponent = Single SingleComponent | Multi MultiComponent
-  deriving (Show, Eq)
-
-data SingleComponent = SingleComponent
-  { _singleComponentSelectedValue :: Value,
-    _singleComponentAllValues :: [Value]
-  }
-  deriving (Show, Eq)
-
-data MultiComponent = MultiComponent
-  { _multiComponentSelectedValueRange :: [Value],
-    _multiComponentAllValueRanges :: [[Value]]
-  }
-  deriving (Show, Eq)
-
-data Value = Regular String | Tuple [String]
-  deriving (Show, Eq)
-
-tupleInsideAnotherValue :: String
-tupleInsideAnotherValue =
-  "Found a tuple-parameter inside of the value range of another parameter."
-
-makeFields ''SingleComponent
-makeFields ''MultiComponent

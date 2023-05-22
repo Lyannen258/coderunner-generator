@@ -8,13 +8,14 @@ import Lens.Micro ((^.), (^?), _Just)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Data.Maybe (fromMaybe)
+import Generator.Atoms (ParameterName(ParameterName))
 
 -- * Interface
 
 parse :: String -> Either String (PAST.ParameterAST, Template)
 parse s = do
   tmpl <- parseTemplate s
-  return (fromMaybe (PAST.ParameterAST PAST.placeholder []) (tmpl ^? parameterSection . _Just . parameterBody), tmpl)
+  return (fromMaybe (PAST.ParameterAST []) (tmpl ^? parameterSection . _Just . parameterBody), tmpl)
 
 parseTemplate :: String -> Either String Template
 parseTemplate template =
@@ -159,7 +160,7 @@ parameterUsageParser :: Parser OutputInner
 parameterUsageParser = do
   i <- identifierParser
   cp <- (optional . try) callPartParser
-  return $ Parameter $ ParameterUsage i cp
+  return $ Parameter $ ParameterUsage (ParameterName i) cp
 
 callPartParser :: Parser CallPart
 callPartParser = do

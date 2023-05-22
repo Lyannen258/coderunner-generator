@@ -1,9 +1,16 @@
 module Generator.Helper where
-import Control.Monad.IO.Class (MonadIO(liftIO))
 
-maybeToEither :: Maybe a -> String -> Either String a
-maybeToEither (Just a) _ = Right a
-maybeToEither Nothing s = Left s
+import Control.Monad.Except
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Generator.ParseResult.Type (ParseResultBuilder)
+
+maybeToError :: MonadError String m =>  Maybe a -> String -> m a
+maybeToError (Just a) _ = return a
+maybeToError Nothing s = throwError s
+
+maybeToParseResult :: Maybe a -> String -> ParseResultBuilder a
+maybeToParseResult (Just a) _ = return a
+maybeToParseResult (Nothing) s = throwError s
 
 fillToTwenty :: String -> String
 fillToTwenty s =

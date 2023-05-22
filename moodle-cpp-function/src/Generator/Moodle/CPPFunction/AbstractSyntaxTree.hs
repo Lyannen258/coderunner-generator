@@ -15,6 +15,7 @@ module Generator.Moodle.CPPFunction.AbstractSyntaxTree where
 
 import Lens.Micro.TH
 import Generator.ParameterParser.AST (ParameterAST)
+import Generator.Atoms (ParameterName)
 
 -- * Pos type class and type
 
@@ -53,8 +54,6 @@ data ParameterSection = ParameterSection
   }
   deriving (Show)
 
-type Identifier = String
-
 -- ** Output
 
 -- | Represents an output using double curly brackets
@@ -66,7 +65,7 @@ data Output
 -- | Represents the usage of a parameter
 data ParameterUsage = ParameterUsage
   { parameterUsagePosition :: Position,
-    parameterUsageIdentifier :: Identifier,
+    parameterUsageIdentifier :: ParameterName,
     parameterUsageCallPart :: Maybe CallPart
   }
   deriving (Show)

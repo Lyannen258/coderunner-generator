@@ -15,6 +15,7 @@ module Generator.Moodle.CPPProgram.AbstractSyntaxTree where
 
 import Generator.ParameterParser.AST (ParameterAST)
 import Lens.Micro.TH
+import Generator.Atoms
 
 -- * Pos type class and type
 
@@ -70,7 +71,7 @@ data OutputInner
 
 -- | Represents the usage of a parameter
 data ParameterUsage = ParameterUsage
-  { parameterUsageIdentifier :: Identifier,
+  { parameterUsageIdentifier :: ParameterName,
     parameterUsageCallPart :: Maybe CallPart
   }
   deriving (Show)

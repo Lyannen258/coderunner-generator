@@ -1,60 +1,81 @@
+{-# LANGUAGE RankNTypes #-}
+
 module Generator.Interactive where
 
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (liftIO)
+import Data.Foldable
 import Data.List (intercalate, nub)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.Sequence (Seq, fromList)
 import Generator.App
+import Generator.Atoms as Atoms
 import Generator.Configuration.Internal
-import Generator.Configuration.Type
-import Generator.ParameterName
+import Generator.Configuration.Type as Config
 import Text.Read (readMaybe)
 
-chooseConfig ::[Configuration] -> App r u Configuration
+chooseConfig :: [Configuration] -> App r u Configuration
 chooseConfig cs = do
-  cAsList <- foldM f cs (allParameters cs)
-  return $ head cAsList
+  cs' <- f (singleParameters . head $ cs) getSingleParameter cs
+  cs'' <- f (singleTupleParameters . head $ cs) getSingleTupleParameter cs'
+  cs''' <- f (multiParameters . head $ cs) getMultiParameter cs''
+  cs'''' <- f (multiTupleParameters . head $ cs) getMultiTupleParameter cs'''
+  return $ head cs''''
   where
-    f acc pn = do
-      vc <- chooseParameterValue pn (allValuesForParameter pn acc)
-      return $ filterConfigs pn vc acc
+    f ps getP configs = foldM (f' getP) configs ps
 
-allParameters :: [Configuration] -> [ParameterName]
-allParameters (c : _) = map name (parameters c)
-allParameters _ = []
+    f' getP configs p
+      | length configs > 1 = chooseParameterValue' (getP p.name) configs p
+      | otherwise = return configs
 
-allValuesForParameter :: ParameterName -> [Configuration] -> [ValueComponent]
-allValuesForParameter pn cs = nub $ map valueComponent ps
+allValuesForParameter ::
+  Eq (v a) =>
+  ParameterName ->
+  [Configuration] ->
+  (Configuration -> Maybe (Parameter v a)) ->
+  RangeType v a
+allValuesForParameter pn cs f =
+  RangeType
+    . fromList
+    . nub
+    . concatMap (toList . Atoms.range . Config.range)
+    . mapMaybe f
+    $ cs
+
+chooseParameterValue' ::
+  (Show (v a), Eq (v a)) =>
+  (Configuration -> Maybe (Parameter v a)) ->
+  [Configuration] ->
+  Parameter v a ->
+  App r u [Configuration]
+chooseParameterValue' f configs p =
+  filterConfigs
+    <$> chooseParameterValue p.name validVals
+    <*> pure f
+    <*> pure configs
   where
-    ps = map (getParameterMustExist pn) cs
+    validVals = allValuesForParameter p.name configs f
 
-chooseParameterValue :: ParameterName -> [ValueComponent] -> App r u ValueComponent
-chooseParameterValue pn vcs
-  | length vcs == 1 = return $ head vcs
-  | otherwise = do
-      let l = zip ([1 ..] :: [Int]) vcs
-      liftIO $ putStrLn $ "Choose a value for parameter " ++ show pn ++ ": "
-      liftIO $ mapM_ (\(n, vc) -> putStrLn (show n ++ ")   " ++ showValueComponent vc)) l
-      input <- liftIO getLine
-      let maybeValue = readMaybe input >>= flip lookup l
-      case maybeValue of
-        Nothing -> do liftIO $ putStrLn "Invalid Input"; chooseParameterValue pn vcs
-        Just a -> return a
+chooseParameterValue :: Show (v a) => ParameterName -> RangeType v a -> App r u (v a)
+chooseParameterValue pn r = do
+  let vcs = toList . Atoms.range $ r
+  let l = zip ([1 ..] :: [Int]) vcs
+  liftIO $ putStrLn $ "Choose a value for parameter " ++ show pn ++ ": "
+  liftIO $ mapM_ (\(n, vc) -> putStrLn (show n ++ ")   " ++ show vc)) l
+  input <- liftIO getLine
+  let maybeValue = readMaybe input >>= flip lookup l
+  case maybeValue of
+    Nothing -> do liftIO $ putStrLn "Invalid Input"; chooseParameterValue pn r
+    Just a -> return a
 
-showValueComponent :: ValueComponent -> String
-showValueComponent (Single (SingleComponent v _)) = showValue v
-showValueComponent (Multi (MultiComponent vs _)) = "[" ++ intercalate "," (map showValue vs) ++ "]"
-
-showValue :: Value -> String
-showValue (Regular s) = s
-showValue (Tuple ss) = "(" ++ intercalate "," ss ++ ")"
-
-filterConfigs :: ParameterName -> ValueComponent -> [Configuration] -> [Configuration]
-filterConfigs pn vc = filter f
+filterConfigs ::
+  Eq (v a) =>
+  v a ->
+  (Configuration -> Maybe (Parameter v a)) ->
+  [Configuration] ->
+  [Configuration]
+filterConfigs val getP = filter f
   where
-    f config = valueComponent (getParameterMustExist pn config) == vc
-
-getParameterMustExist :: ParameterName -> Configuration -> Parameter
-getParameterMustExist pn c =
-  case getParameter c pn of
-    Nothing -> error "The parameter must exist!"
-    Just a -> a
+    f config = case getP config of
+      Nothing -> False
+      Just p -> val == p.selectedValue
