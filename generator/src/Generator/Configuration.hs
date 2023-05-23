@@ -1,8 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
-
 module Generator.Configuration
   ( Configuration,
     getSingleValue,
@@ -13,14 +8,20 @@ module Generator.Configuration
 where
 
 import Control.Applicative ((<|>))
-import Control.Monad.Error (MonadError (throwError))
+import Control.Monad.Except (MonadError (throwError))
 import Data.Foldable (toList)
-import Data.Sequence (Seq)
 import Generator.Atoms (AtomicValue (value), MultiValue (value), ParameterName (name), SingleValue (value))
 import Generator.Configuration.Internal
+  ( getMultiParameter,
+    getMultiTupleParameter,
+    getSingleParameter,
+    getSingleTupleParameter,
+    getValueByIndexMulti,
+    getValueByIndexSingle,
+    noMatchingMethodErr,
+  )
 import Generator.Configuration.Type hiding (name)
-import Generator.Helper (maybeToError, singleton)
-import Lens.Micro ((^.))
+import Generator.Helper (maybeToError)
 import Text.Read (readMaybe)
 
 getSingleValue :: Configuration -> ParameterName -> Maybe String
@@ -34,21 +35,7 @@ getMultiValue c pn =
     . selectedValue
     <$> getMultiParameter pn c
 
--- contains :: Configuration -> ParameterName -> Bool
--- contains c pn = case getParameter c pn of
---   Nothing -> False
---   Just _ -> True
-
-evaluateMethod :: MonadError String m => Configuration -> ParameterName -> String -> [String] -> m [String] -- String is function name, First [String] is arguments, returned [String] is result
--- evaluateMethod conf pn "all" _ = do
---   vs <- getAllValues conf pn
---   maybeToEither (mapM toString vs) tupleInsideAnotherValue
--- evaluateMethod conf pn fn@"random" [arg] = do
---   allVs <- getAllValues conf pn
---   amount <- maybeToEither (readMaybe arg) (argumentMustBeTypeErr fn "1" "int")
---   let rs = take amount (randomNumbers conf)
---   let maybeValues = map (\r -> toString $ allVs !! (r `mod` length allVs)) rs
---   maybeToEither (sequence maybeValues) "There were tuple values inside of the randomly choosen values"
+evaluateMethod :: MonadError String m => Configuration -> ParameterName -> String -> [String] -> m [String] -- String is
 evaluateMethod conf pn "get" [arg] =
   maybeToError
     (evaluateGetMethodSingle conf pn arg <|> evaluateGetMethodMulti conf pn arg)

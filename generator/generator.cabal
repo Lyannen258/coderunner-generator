@@ -59,4 +59,3 @@ library
       RankNTypes,
       ImportQualifiedPost,
       FlexibleContexts
-  ghc-options: -Wall

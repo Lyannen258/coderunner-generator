@@ -17,7 +17,7 @@ module Generator.Atoms
     SingleTupleValue (..),
     MultiValue (..),
     MultiTupleValue (..),
-    tupleLookup
+    tupleLookup,
   )
 where
 

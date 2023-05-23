@@ -7,11 +7,11 @@ module Generator.Globals
     getDebugOutputFlag,
     getAmount,
     getMaxConfigurations,
-    getInteractive
+    getInteractive,
   )
 where
 
-import Generator.CmdArgs (Args (amount, debugOutput, templateFile, maxConfigurations, interactive))
+import Generator.CmdArgs (Args (amount, debugOutput, interactive, maxConfigurations, templateFile))
 import Generator.Configuration
 
 data Globals r u = Globals

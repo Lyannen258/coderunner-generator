@@ -4,9 +4,7 @@
 module Generator.ParseResult.Type where
 
 import Control.Monad.Except (ExceptT, MonadError)
-import Control.Monad.Reader
 import Control.Monad.State
-import Data.Sequence as Seq
 import Generator.Atoms
 
 newtype ParseResultBuilder x = ParseResultBuilder
@@ -19,8 +17,6 @@ newtype ParseResultBuilder x = ParseResultBuilder
       MonadState ParseResult,
       MonadError String
     )
-
-
 
 -- | Main data type. Used to pass information from a specialized generator to the main generator.
 newtype ParseResult = ParseResult {comp :: ParameterComposition} -- maybe add Enumeration in future

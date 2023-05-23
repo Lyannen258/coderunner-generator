@@ -9,7 +9,6 @@ import Generator.ParameterParser.AST as AST
 import Generator.ParseResult
 import Generator.ParseResult.Info
 import Generator.ParseResult.Type as PR
-import Debug.Pretty.Simple (pTraceShowId)
 
 fromParameterAST :: AST.ParameterAST -> Either String ParseResult
 fromParameterAST pAST = case runState (runExceptT . unParseResultM $ f) empty of

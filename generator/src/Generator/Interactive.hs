@@ -5,9 +5,9 @@ module Generator.Interactive where
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Foldable
-import Data.List (intercalate, nub)
-import Data.Maybe (catMaybes, mapMaybe)
-import Data.Sequence (Seq, fromList)
+import Data.List (nub)
+import Data.Maybe (mapMaybe)
+import Data.Sequence (fromList)
 import Generator.App
 import Generator.Atoms as Atoms
 import Generator.Configuration.Internal
@@ -30,11 +30,10 @@ chooseConfig cs = do
 
 allValuesForParameter ::
   Eq (v a) =>
-  ParameterName ->
   [Configuration] ->
   (Configuration -> Maybe (Parameter v a)) ->
   RangeType v a
-allValuesForParameter pn cs f =
+allValuesForParameter cs f =
   RangeType
     . fromList
     . nub
@@ -54,7 +53,7 @@ chooseParameterValue' f configs p =
     <*> pure f
     <*> pure configs
   where
-    validVals = allValuesForParameter p.name configs f
+    validVals = allValuesForParameter configs f
 
 chooseParameterValue :: Show (v a) => ParameterName -> RangeType v a -> App r u (v a)
 chooseParameterValue pn r = do

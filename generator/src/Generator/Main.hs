@@ -1,14 +1,13 @@
 module Generator.Main (main) where
 
-import Control.Monad (forM, forM_, unless, when)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad (unless, when)
 import Control.Monad.Except (liftEither)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Generator.App (App)
 import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
 import Generator.Globals
 import Generator.Helper (printLn)
-import Generator.Interactive (chooseConfig)
 import Generator.ParseResult (ParseResult)
 import Generator.ToParseResult (ToParseResult (toParseResult))
 import System.Directory (createDirectoryIfMissing)

@@ -1,16 +1,11 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Generator.ParameterParser (parser) where
 
-import Data.Maybe (catMaybes)
 import Generator.Atoms
 import Generator.ParameterParser.AST
 import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Read (readMaybe)
-import Control.Monad.Reader (ask)
-import Text.Megaparsec.Debug (dbg)
 
 -- * Main parsers
 
@@ -57,17 +52,7 @@ multiRangeParser = sepBy1 multiValueParser comma
 multiTupleRangeParser :: Parser [[[IncompleteAtomicValue]]]
 multiTupleRangeParser = sepBy1 multiTupleValueParser comma
 
--- multiValueListParser :: Parser [[AtomicValue]]
--- multiValueListParser = sepBy1 valueRangeParser comma
-
--- valueRangeParser :: Parser [AtomicValue]
--- valueRangeParser =
---   openSquare *> singleValueListParser <* closingSquare
-
--- valueParser :: Parser AtomicValue
--- valueParser = regularValueParser <|> tupleValueParser
-
-regularValueParser :: Parser IncompleteAtomicValue 
+regularValueParser :: Parser IncompleteAtomicValue
 regularValueParser = valueParserDouble <|> valueParserSingle
 
 valueParserDouble :: Parser IncompleteAtomicValue
@@ -77,7 +62,7 @@ valueParserDouble = do
   _ <- closingQuotes
   return $ IncompleteAtomicValue valueParts
 
-valueParserSingle :: Parser IncompleteAtomicValue 
+valueParserSingle :: Parser IncompleteAtomicValue
 valueParserSingle = do
   _ <- openSingle
   valueParts <- some $ valuePartParser closingSingle

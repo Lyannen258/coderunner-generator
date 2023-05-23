@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
-module Generator.App (App(..)) where
+module Generator.App (App (..)) where
 
 import Control.Monad.Except
 import Control.Monad.Reader

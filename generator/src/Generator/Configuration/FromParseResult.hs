@@ -1,22 +1,17 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use first" #-}
 
 module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
 
-import Control.Monad.Extra (foldM, forM, ifM, when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (liftCatch)
-import Data.Foldable (Foldable(toList), find, foldl')
-import Data.List (nub)
-import Data.Maybe (fromMaybe)
-import Data.Sequence (Seq)
 import Control.Monad.Except
+import Control.Monad.Extra (ifM)
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans.Maybe (maybeToExceptT)
+import Data.Foldable (Foldable (toList), foldl')
+import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Data.Sequence qualified as Seq
 import Generator.App
 import Generator.Atoms
@@ -24,14 +19,12 @@ import Generator.Configuration as C
 import Generator.Configuration.Internal as C
 import Generator.Configuration.Type
 import Generator.Globals (getAmount, getInteractive)
-import Generator.Interactive
-import Generator.Atoms
-import Generator.ParseResult.Type (Constraint, ParseResult)
 import Generator.Helper (maybeToError, printLn, singleton)
+import Generator.Interactive
 import Generator.ParseResult.Info qualified as PR
+import Generator.ParseResult.Type (Constraint, ParseResult)
 import Generator.ParseResult.Type qualified as PR
 import System.Random (RandomGen, getStdGen, uniformR)
-import Debug.Pretty.Simple (pTraceShowId)
 
 computeMaxAmount :: ParseResult -> App r u Int
 computeMaxAmount pr = case allCombinations pr of
@@ -59,7 +52,6 @@ chooseRandoms :: Int -> [Configuration] -> App r u [Configuration]
 chooseRandoms amount configs = do
   randoms <- getRandomNumbers amount (length configs)
   return $ map (configs !!) randoms
-
 
 allCombinations :: ParseResult -> ConfigListRaw
 allCombinations pr =
@@ -135,7 +127,7 @@ getNDistinct amountNumbers amountConfigs = fillToN []
            in fillToN (rand : acc) newGen
 
 generateConfiguration :: (MonadIO m, MonadError String m) => ParseResult -> ConfigRaw -> m Configuration
-generateConfiguration pr configRaw = makeConfig pr configRaw
+generateConfiguration = makeConfig
 
 makeConfig :: (MonadIO m, MonadError String m) => ParseResult -> ConfigRaw -> m Configuration
 makeConfig pr cr = do
@@ -243,7 +235,7 @@ data ValuePartProcessed
 makeFinalValuePart :: ValuePart -> ConfigurationM ValuePartProcessed
 makeFinalValuePart (StringPart s) = return $ Simple s
 makeFinalValuePart (IdUsage pn) = processIdUsage pn
-makeFinalValuePart (TupleSelect pn i) = processTupleSelect (pn) i
+makeFinalValuePart (TupleSelect pn i) = processTupleSelect pn i
 
 processWith ::
   ParameterName ->
@@ -253,7 +245,7 @@ processWith pn func = do
   pr <- asks snd
   pt <- parameterType pn
   func pt $
-    case PR.getParameter  pr pn of
+    case PR.getParameter pr pn of
       Just p -> do
         processParameter p
         func pt err
@@ -288,219 +280,3 @@ processTupleSelect pn i = processWith pn tryWithPT
         selectedValues <- liftEither $ mapM (`tupleLookup` i) param.selectedValue.value
         return . Several pn . toList $ fmap (.value) selectedValues
       _ -> else'
-
-checkMultiUsageRequirements :: ParameterName -> ConfigurationM ()
-checkMultiUsageRequirements pn = do
-  pr <- asks snd
-  if PR.countValues pr pn == 1 then return () else throwError "It is not possible to use a multi or multi-tuple parameter inside of the definition of a parameter with a range of more than a single value"
-
--- buildParameter :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u Configuration
--- buildParameter pr cr c p@(PR.Parameter n r)
---   | PR.containsMultiParamUsage pr n =
---     if checkMultiParamUsageReqs pr p
---       then do
---         (vs, newC) <- buildWithMultiParamUsage pr cr c p
---         let p' = Parameter n $ Multi $ MultiComponent vs [vs]
---         return $ C.addParameter newC p'
---       else (lift . throwE) incorrectUsageOfMultiParam
---   | otherwise = do
---     (_, i) <- lift . except $ maybeToEither (find (\(n', _) -> n == n') cr) "Something went wrong"
---     case r of
---       PR.Single (PR.SingleRange vs) -> buildSingleParameter pr cr c n i vs
---       PR.SingleTuple (PR.SingleTupleRange vs) -> buildSingleTupleParameter pr cr c n i vs
---       PR.Multi (PR.MultiRange vs) -> buildMultiParameter pr cr c n i vs
---       PR.MultiTuple (PR.MultiTupleRange vs) -> buildMultiTupleParameter pr cr c n i vs
-
--- buildSingleParameter :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> Seq PR.RegularValue -> App r u Configuration
--- buildSingleParameter pr cr c pn i rvs = do
---   (vs, c') <- foldM (regularFolder pr cr) ([], c) rvs
---   let p = Parameter pn $ Single $ SingleComponent (vs !! i) vs
---   return $ addParameter c' p
-
--- regularFolder :: ParseResult -> ConfigRaw -> ([Value], Configuration) -> PR.RegularValue -> App r u ([Value], Configuration)
--- regularFolder pr cr (vsLocal, cLocal) rv = do
---   (v, cLocal') <- buildRegularValue pr cr cLocal rv
---   return (vsLocal ++ [Regular v], cLocal')
-
--- buildSingleTupleParameter :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> Seq PR.TupleValue -> App r u Configuration
--- buildSingleTupleParameter pr cr c pn i tvs = do
---   (vs, c') <- foldM (tupleFolder pr cr) ([], c) tvs
---   let p = Parameter pn $ Single $ SingleComponent (vs !! i) vs
---   return $ addParameter c' p
-
--- tupleFolder :: ParseResult -> ConfigRaw -> ([Value], Configuration) -> PR.TupleValue -> App r u ([Value], Configuration)
--- tupleFolder pr cr (vsLocal, cLocal) (PR.Tuple rvs) = do
---   (strs, cLocal') <- buildTupleValue pr cr cLocal rvs
---   return (vsLocal ++ [Tuple strs], cLocal')
-
--- buildMultiParameter :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> Seq (Seq PR.RegularValue) -> App r u Configuration
--- buildMultiParameter pr cr c pn i rvss = do
---   (vss, c') <- foldM f ([], c) rvss
---   let p = Parameter pn $ Multi $ MultiComponent (vss !! i) vss
---   return $ addParameter c' p
---   where
---     f :: ([[Value]], Configuration) -> Seq PR.RegularValue -> App r u ([[Value]], Configuration)
---     f (vss, cLocal) rvs = do
---       (vs, cLocal') <- foldM (regularFolder pr cr) ([], cLocal) rvs
---       return (vss ++ [vs], cLocal')
-
--- buildMultiTupleParameter :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> Seq (Seq PR.TupleValue) -> App r u Configuration
--- buildMultiTupleParameter pr cr c pn i tvss = do
---   (vss, c') <- foldM f ([], c) tvss
---   let p = Parameter pn $ Multi $ MultiComponent (vss !! i) vss
---   return $ addParameter c' p
---   where
---     f :: ([[Value]], Configuration) -> Seq PR.TupleValue -> App r u ([[Value]], Configuration)
---     f (vss, cLocal) tvs = do
---       (vs, cLocal') <- foldM (tupleFolder pr cr) ([], cLocal) tvs
---       return (vss ++ [vs], cLocal')
-
--- buildRegularValue :: ParseResult -> ConfigRaw -> Configuration -> PR.RegularValue -> App r u (String, Configuration)
--- buildRegularValue pr cr c rv = case rv of
---   PR.Final s -> return (s, c)
---   PR.NeedsInput vps -> do
---     makeFinal pr cr c vps
-
--- buildTupleValue :: ParseResult -> ConfigRaw -> Configuration -> Seq PR.RegularValue -> App r u ([String], Configuration)
--- buildTupleValue pr cr c = foldM f ([], c)
---   where
---     f :: ([String], Configuration) -> PR.RegularValue -> App r u ([String], Configuration)
---     f (vsLocal, cLocal) rv = do
---       (v, cLocal') <- buildRegularValue pr cr cLocal rv
---       return (vsLocal ++ [v], cLocal')
-
--- makeFinal :: ParseResult -> ConfigRaw -> Configuration -> [ValuePart] -> App r u (String, Configuration)
--- makeFinal pr cr c = foldM f ("", c)
---   where
---     f :: (String, Configuration) -> ValuePart -> App r u (String, Configuration)
---     f (s, cLocal) vp = do
---       (addS, cLocal') <- makeFinalValuePart pr cr cLocal vp
---       return (s ++ addS, cLocal')
-
--- makeFinalValuePart :: ParseResult -> ConfigRaw -> Configuration -> ValuePart -> App r u (String, Configuration)
--- makeFinalValuePart _ _ c (PR.StringPart s) =
---   return (s, c)
--- makeFinalValuePart pr cr c (PR.ParameterPart pn) =
---   evaluateParameterPart pn pr cr c
--- makeFinalValuePart pr cr c (PR.TupleSelect pn i) =
---   evaluateTuplePart pn i pr cr c
-
--- evaluateParameterPart :: ParameterName -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, Configuration)
--- evaluateParameterPart pn pr cr c =
---   let maybeSingleValue = getSingleValue c pn
---       maybeSearchedX = find (\x -> fst x == pn) cr
---    in case maybeSingleValue of
---         Just str -> return (str, c)
---         Nothing -> case maybeSearchedX of
---           Nothing -> lift . throwE $ paramNotFoundErr pn
---           Just (pn', _) -> do
---             newC <- case PR.getParameter pr pn' of
---               Nothing -> lift . throwE $ paramNotFoundErr pn
---               Just pa -> buildParameter pr cr c pa
---             case getSingleValue newC pn' of
---               Just s -> return (s, newC)
---               _ -> lift . throwE $ "Parameter " ++ unParameterName pn ++ " cannot be resolved"
-
--- evaluateTuplePart :: ParameterName -> Int -> ParseResult -> ConfigRaw -> Configuration -> App r u (String, Configuration)
--- evaluateTuplePart pn i pr cr c =
---   if contains c pn
---     then f c
---     else case find (\x -> fst x == pn) cr of
---       Nothing -> lift . throwE $ paramNotFoundErr pn
---       Just (pn', _) -> do
---         newC <- case PR.getParameter pr pn' of
---           Nothing -> lift . throwE $ paramNotFoundErr pn
---           Just pa -> buildParameter pr cr c pa
---         f newC
---   where
---     f conf' = case getTupleValueSingle conf' pn of
---       Nothing -> lift . throwE $ "Tried to call 'get' on parameter '" ++ show pn ++ "', but it is not a tuple parameter"
---       Just ss ->
---         if i < length ss
---           then return (ss !! i, conf')
---           else lift . throwE $ "Tried to get value " ++ show i ++ " of parameter '" ++ show pn ++ "', but it has only " ++ show (length ss)
-
--- getTupleValueSingle :: Configuration -> ParameterName -> Maybe [String]
--- getTupleValueSingle conf pn = do
---   vc <- getValueComponent conf pn
---   case vc of
---     Single (SingleComponent (Tuple ss) _) -> Just ss
---     _ -> Nothing
-
--- buildWithMultiParamUsage :: ParseResult -> ConfigRaw -> Configuration -> PR.Parameter -> App r u ([Value], Configuration)
--- buildWithMultiParamUsage pr cr c (PR.Parameter _ (PR.Single (PR.SingleRange vs))) = case Seq.lookup 0 vs of
---   (Just (PR.NeedsInput vps)) -> do
---     (strs, _, newC) <- foldM f ([], [], c) vps
---     return (map Regular strs, newC)
---   _ -> lift . throwE $ "This error should not be happening"
---   where
---     f :: ([String], [ParameterName {- already occured tuple parameters -}], Configuration) -> ValuePart -> App r u ([String], [ParameterName], Configuration)
---     f (strs, names, cLocal) (PR.StringPart s) = case strs of
---       [] -> return ([s], names, cLocal)
---       _ -> return (map (++ s) strs, names, cLocal)
---     f (strs, names, cLocal) (PR.ParameterPart pn) = do
---       (paramValues, cLocal') <- evaluateParameterPartMulti pr cr cLocal pn
---       return ([str ++ param | str <- strs, param <- paramValues], names, cLocal')
---     f (strs, names, cLocal) (PR.TupleSelect pn i) = do
---       (paramValues, cLocal') <- evaluateTupleMulti pr cr cLocal pn i
---       let names' = names ++ [pn]
---       if pn `elem` names
---         then return (zipWith (++) strs paramValues, names, cLocal')
---         else return ([str ++ param | str <- strs, param <- paramValues], names', cLocal')
--- buildWithMultiParamUsage _ _ _ _ = lift . throwE $ "Usage of multi parameter in another parameter, that is not a regular single parameter, is not allowed."
-
--- evaluateParameterPartMulti :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> App r u ([String], Configuration)
--- evaluateParameterPartMulti pr cr c n = do
---   liftCatch catchE evaluateParameterPart' catcher
---   where
---     evaluateParameterPart' :: App r u ([String], Configuration)
---     evaluateParameterPart' = do
---       (sLocal, cLocal) <- evaluateParameterPart n pr cr c
---       return ([sLocal], cLocal)
-
---     catcher :: String -> App r u ([String], Configuration)
---     catcher _ = case getMultiValue c n of
---       Just strs -> return (strs, c)
---       Nothing -> do
---         newC <- case PR.getParameter pr n of
---           Nothing -> lift . throwE $ paramNotFoundErr n
---           Just pa -> buildParameter pr cr c pa
---         case getMultiValue newC n of
---           Just strs -> return (strs, newC)
---           _ -> lift . throwE $ tupleInsideAnotherValue
-
--- evaluateTupleMulti :: ParseResult -> ConfigRaw -> Configuration -> ParameterName -> Int -> App r u ([String], Configuration)
--- evaluateTupleMulti pr cr c pn i = do
---   liftCatch catchE evaluateTuplePart' catcher
---   where
---     evaluateTuplePart' :: App r u ([String], Configuration)
---     evaluateTuplePart' = do
---       (sLocal, cLocal) <- evaluateTuplePart pn i pr cr c
---       return ([sLocal], cLocal)
-
---     catcher :: String -> App r u ([String], Configuration)
---     catcher _ = case getMultiValue' c pn of
---       Just vs -> do
---         case mapM valueToTupleValue vs of
---           Nothing -> lift . throwE $ show pn ++ " is not a tuple value, but 'get' was called on it."
---           Just strs -> return (strs, c)
---       Nothing -> do
---         newC <- case PR.getParameter pr pn of
---           Nothing -> lift . throwE $ paramNotFoundErr pn
---           Just pa -> buildParameter pr cr c pa
---         case getMultiValue' newC pn of
---           Just vs -> do
---             case mapM valueToTupleValue vs of
---               Nothing -> lift . throwE $ show pn ++ " is not a tuple value, but 'get' was called on it."
---               Just strs -> return (strs, c)
---           Nothing -> lift . throwE $ paramNotFoundErr pn
-
---     valueToTupleValue :: Value -> Maybe String
---     valueToTupleValue (Tuple strs) = if i < length strs then Just (strs !! i) else Nothing
---     valueToTupleValue _ = Nothing
-
--- paramNotFoundErr :: ParameterName -> String
--- paramNotFoundErr pn = "Found usage of parameter " ++ unParameterName pn ++ ", but it was never defined."
-
--- incorrectUsageOfMultiParam :: String
--- incorrectUsageOfMultiParam = "Usage of a multi parameter in the value range of another parameter that has more than one possible value or is a multi parameter itself is not allowed"
