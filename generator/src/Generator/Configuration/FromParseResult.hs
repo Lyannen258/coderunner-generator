@@ -31,6 +31,7 @@ import Generator.Helper (maybeToError, printLn, singleton)
 import Generator.ParseResult.Info qualified as PR
 import Generator.ParseResult.Type qualified as PR
 import System.Random (RandomGen, getStdGen, uniformR)
+import Debug.Pretty.Simple (pTraceShowId)
 
 computeMaxAmount :: ParseResult -> App r u Int
 computeMaxAmount pr = case allCombinations pr of
@@ -242,7 +243,7 @@ data ValuePartProcessed
 makeFinalValuePart :: ValuePart -> ConfigurationM ValuePartProcessed
 makeFinalValuePart (StringPart s) = return $ Simple s
 makeFinalValuePart (IdUsage pn) = processIdUsage pn
-makeFinalValuePart (TupleSelect pn i) = processTupleSelect pn i
+makeFinalValuePart (TupleSelect pn i) = processTupleSelect (pn) i
 
 processWith ::
   ParameterName ->
@@ -252,7 +253,7 @@ processWith pn func = do
   pr <- asks snd
   pt <- parameterType pn
   func pt $
-    case PR.getParameter pr pn of
+    case PR.getParameter  pr pn of
       Just p -> do
         processParameter p
         func pt err

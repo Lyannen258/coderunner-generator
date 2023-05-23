@@ -39,10 +39,10 @@ parameterPartParser = do
 valueRangeParser :: Parser (Range IncompleteAtomicValue)
 valueRangeParser = do
   choice
-    [ fmap makeSingleRange singleRangeParser,
-      fmap makeSingleTupleRange singleTupleRangeParser,
-      fmap makeMultiRange multiRangeParser,
-      fmap makeMultiTupleRange multiTupleRangeParser
+    [ try $ fmap makeSingleRange singleRangeParser,
+      try $ fmap makeSingleTupleRange singleTupleRangeParser,
+      try $ fmap makeMultiRange multiRangeParser,
+      try $ fmap makeMultiTupleRange multiTupleRangeParser
     ]
 
 singleRangeParser :: Parser [IncompleteAtomicValue]
@@ -94,7 +94,7 @@ multiValueParser =
 
 multiTupleValueParser :: Parser [[IncompleteAtomicValue]]
 multiTupleValueParser =
-  openSquare *> sepBy tupleValueParser comma <* closingSquare
+  openSquare *> sepBy1 tupleValueParser comma <* closingSquare
 
 valuePartParser :: Parser Char -> Parser ValuePart
 valuePartParser endParser =

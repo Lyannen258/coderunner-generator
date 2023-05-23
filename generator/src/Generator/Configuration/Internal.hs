@@ -14,6 +14,7 @@ import Lens.Micro ((^.))
 import System.Random (getStdGen, randoms)
 import Text.Read (readMaybe)
 import qualified Data.Sequence as Seq
+import Debug.Pretty.Simple (pTraceShowId)
 
 empty :: IO Configuration
 empty = do
@@ -51,15 +52,16 @@ addMultiTupleParameter p = do
   return ()
 
 data ParameterType = SingleT | SingleTupleT | MultiT | MultiTupleT
+  deriving (Show)
 
 parameterType :: (MonadState Configuration m, MonadError String m) => ParameterName -> m (Maybe ParameterType)
 parameterType pn = do
   c <- get
-  return $
+  return $ pTraceShowId $
     f c.singleParameters SingleT
-      <|> f c.singleParameters SingleT
-      <|> f c.singleParameters SingleT
-      <|> f c.singleParameters SingleT
+      <|> f c.singleTupleParameters SingleTupleT
+      <|> f c.multiParameters MultiT
+      <|> f c.multiTupleParameters MultiTupleT
   where
     f :: [Parameter v a] -> ParameterType -> Maybe ParameterType
     f container ret = case findParameter container pn of
