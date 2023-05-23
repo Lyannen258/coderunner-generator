@@ -14,3 +14,9 @@ cradle:
 
     - path: "moodle-cpp-program/app/Main.hs"
       component: "moodle-cpp-program:exe:moodle-cpp-program"
+
+    - path: "moodle-cpp-tracing/src"
+      component: "moodle-cpp-tracing:lib"
+
+    - path: "moodle-cpp-tracing/app/Main.hs"
+      component: "moodle-cpp-tracing:exe:moodle-cpp-tracing"
