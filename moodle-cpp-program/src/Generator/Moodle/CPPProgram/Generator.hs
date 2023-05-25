@@ -15,12 +15,14 @@ valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
 
-generate :: [Configuration] -> Template -> Either String String
-generate configs tem = do
-  elements <- mapM f configs
-  let doc = node (unqual "quiz") elements
-  return $ ppTopElement doc
+generate :: [Configuration] -> Template -> IO (Either String String)
+generate configs tem = return nonIO
   where
+    nonIO = do
+      elements <- mapM f configs
+      let doc = node (unqual "quiz") elements
+      return $ ppTopElement doc
+
     f :: Configuration -> Either String Element
     f config = generateConfiguration config tem
 

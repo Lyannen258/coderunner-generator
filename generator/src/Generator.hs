@@ -1,7 +1,8 @@
 module Generator (run) where
 
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (runExceptT, MonadError)
 import Control.Monad.Reader (runReaderT)
+import Control.Monad.IO.Class (MonadIO)
 import Generator.App (App (unApp))
 import qualified Generator.CmdArgs as CmdArgs
 import Generator.Configuration (Configuration)
@@ -17,7 +18,7 @@ type ParserFunction r u =
 
 -- | u is the user state that was returned from the parser function
 type GeneratorFunction u =
-  [Configuration] -> u -> Either String String
+  [Configuration] -> u -> IO (Either String String)
 
 -- | The run function
 run :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s -> IO ()

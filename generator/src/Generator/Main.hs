@@ -41,15 +41,16 @@ printMaxAmount :: Int -> App r u ()
 printMaxAmount m = do
   printLn output
   where
-    output = "Maximal amount of configurations: " ++ show m
+    output = "Maximum amount of configurations: " ++ show m
 
 mainConfigurations :: ParseResult -> u -> App r u ()
 mainConfigurations parseResult u = do
   configs <- computeConfigurations parseResult
 
   generator <- asks getGenerator
-  results <- liftEither $ generator configs u
-  writeResult results
+  results <- liftIO $ generator configs u
+  results' <- liftEither results
+  writeResult results'
 
   printLn $ "Generated " ++ (show . length) configs ++ " variants"
 

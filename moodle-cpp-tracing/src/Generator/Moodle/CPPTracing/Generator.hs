@@ -1,13 +1,20 @@
-module Generator.Moodle.CPPTracing.Generator (generate) where
+module Generator.Moodle.CPPTracing.Generator where
 
-import Generator.Moodle.CPPTracing.AbstractSyntaxTree
-import Generator.Helper
-import Generator.Configuration 
-import Control.Monad (foldM)
+import Control.Monad (foldM, join)
+import Control.Monad.Except (MonadError, liftEither)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString qualified as BS (readFile)
+import Data.ByteString.Base64 (encodeBase64)
 import Data.List (foldl', intercalate, nub)
-import Lens.Micro ((^.))
-import Text.XML.Light
+import Data.Text (Text, pack, unpack)
+import GHC.IO.Exception
 import Generator.Atoms (ParameterName (..))
+import Generator.Configuration
+import Generator.Helper
+import Generator.Moodle.CPPTracing.AbstractSyntaxTree
+import Lens.Micro ((^.))
+import System.Process
+import Text.XML.Light
 
 valueNotFoundErr :: ParameterName -> String
 valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
@@ -15,55 +22,43 @@ valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
 
-generate :: [Configuration] -> Template -> Either String String
+generate :: [Configuration] -> Template -> IO (Either String String)
 generate configs tem = do
   elements <- mapM f configs
-  let doc = node (unqual "quiz") elements
-  return $ ppTopElement doc
+  case sequence elements of
+    Right es ->
+      let doc = node (unqual "quiz") es
+       in return . return $ ppTopElement doc
+    Left err -> return $ Left err
   where
-    f :: Configuration -> Either String Element
+    f :: Configuration -> IO (Either String Element)
     f config = generateConfiguration config tem
 
-generateConfiguration :: Configuration -> Template -> Either String Element
-generateConfiguration conf tmpl = do
-  ts <- generateTaskSection conf tmpl
-  ss <- generateSolutionSection conf tmpl
-  pas <- generatePreAllocationSection conf tmpl
-  testS <- generateTestSection conf tmpl
-  buildOutput conf ts ss pas testS tmpl
-
-generateTaskSection :: Configuration -> Template -> Either String String
-generateTaskSection conf tmpl =
-  generateSection conf (tmpl ^. taskSection . body)
-
-generateSolutionSection :: Configuration -> Template -> Either String String
-generateSolutionSection conf tmpl =
-  generateSection conf (tmpl ^. solutionSection . body)
-
-generatePreAllocationSection :: Configuration -> Template -> Either String String
-generatePreAllocationSection conf tmpl =
-  generateSection conf (tmpl ^. preAllocationSection . body)
-
-generateTestSection :: Configuration -> Template -> Either String [(String, String)]
-generateTestSection conf tmpl = concat <$> mapM f (tmpl ^. testSection . testCases)
+generateConfiguration :: Configuration -> Template -> IO (Either String Element)
+generateConfiguration conf tmpl =
+  case sections of
+    Right (cs, fs) -> buildOutput conf cs fs tmpl
+    Left str -> return $ Left str
   where
-    f :: TestCase -> Either String [(String, String)]
-    f tc =
-      let multiParams =
-            nub $
-              findMultiParams conf (tc ^. code)
-                ++ findMultiParams conf (tc ^. outcome)
+    sections = do
+      cs <- generateCodeSection conf tmpl
+      fs <- generateFeedbackSection conf tmpl
+      return (cs, fs)
 
-          getParamValueTuples :: ParameterName -> Either String [(ParameterName, String)]
-          getParamValueTuples parameterName = do
-            multiParamValues <- maybeToError (getMultiValue conf parameterName) shouldNotHappenErr
-            return [(parameterName, v) | v <- multiParamValues]
-       in do
-            paramValueTuples <- mapM getParamValueTuples multiParams
-            let allCombos = combinations paramValueTuples
-            c <- generateMultiSection conf allCombos (tc ^. code)
-            o <- generateMultiSection conf allCombos (tc ^. outcome)
-            return $ zip c o
+generateCodeSection :: Configuration -> Template -> Either String String
+generateCodeSection conf tmpl =
+  generateSection conf (tmpl.codeSection.body)
+
+codeImageBase64 :: String -> IO Text
+codeImageBase64 code = do
+  liftIO $ writeFile "/tmp/moodle-cpp-tracing-code.cpp" code
+  liftIO $ callCommand "silicon --no-window-controls --no-round-corner --background \"#ffffff\" --theme \"1337\" --pad-horiz 0 --pad-vert 0 --output /tmp/img.png /tmp/moodle-cpp-tracing-code.cpp"
+  x <- liftIO $ BS.readFile "/tmp/img.png"
+  return $ encodeBase64 x
+
+generateFeedbackSection :: Configuration -> Template -> Either String String
+generateFeedbackSection conf tmpl =
+  generateSection conf (tmpl.feedbackSection.body)
 
 -- | Computes all combinations of elements of an arbitrary amount of lists
 --
@@ -79,7 +74,7 @@ findMultiParams :: Configuration -> [SectionBodyComponent] -> [ParameterName]
 findMultiParams conf = foldr f []
   where
     f :: SectionBodyComponent -> [ParameterName] -> [ParameterName]
-    f (OutputComponent (Parameter (ParameterUsage _ n _))) acc =
+    f (OutputComponent (Parameter (ParameterUsage n _))) acc =
       case getMultiValue conf n of
         Just _ -> acc ++ [n]
         Nothing -> acc
@@ -96,11 +91,11 @@ generateMultiSection config combs sbcs
     buildSBC :: [(ParameterName, String)] -> String -> SectionBodyComponent -> Either String String
     buildSBC _ acc (TextComponent s) = return (acc ++ s)
     buildSBC _ acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    buildSBC _ acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
+    buildSBC _ acc (OutputComponent (Parameter (ParameterUsage name (Just cp)))) =
       do
-        vs <- evaluateMethod config name (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod config name (cp.identifier) (cp.arguments)
         return $ acc ++ intercalate "\n" vs
-    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
+    buildSBC comb acc (OutputComponent (Parameter (ParameterUsage name Nothing))) =
       do
         value <- case getSingleValue config name of
           Just s -> return s
@@ -115,11 +110,11 @@ generateSection conf = foldM f ""
     f :: String -> SectionBodyComponent -> Either String String
     f acc (TextComponent s) = return (acc ++ s)
     f acc (OutputComponent (TextConstant s)) = return (acc ++ s)
-    f acc (OutputComponent (Parameter (ParameterUsage _ name (Just cp)))) =
+    f acc (OutputComponent (Parameter (ParameterUsage name (Just cp)))) =
       do
-        vs <- evaluateMethod conf name (cp ^. identifier) (cp ^. arguments)
+        vs <- evaluateMethod conf name (cp.identifier) (cp.arguments)
         return $ acc ++ intercalate "\n" vs
-    f acc (OutputComponent (Parameter (ParameterUsage _ name Nothing))) =
+    f acc (OutputComponent (Parameter (ParameterUsage name Nothing))) =
       do
         value <- case getSingleValue conf name of
           Just s -> return s
@@ -128,97 +123,97 @@ generateSection conf = foldM f ""
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 
-buildOutput :: Configuration -> String -> String -> String -> [(String, String)] -> Template -> Either String Element
-buildOutput _ task solution preAllocation tests t =
+buildOutput ::
+  Configuration ->
+  String ->
+  String ->
+  Template ->
+  IO (Either String Element)
+buildOutput _ code feedback t = do
+  questionText <- buildText code t.traceType
+  sol <- buildSolution code t.traceType
+  case sol of
+    Left err -> return $ Left err
+    Right sol ->
+      return . Right $
+        add_attr
+          (Attr (unqual "type") (determineQuestionType t.traceType))
+          ( node
+              (unqual "question")
+              ( [ node
+                    (unqual "name")
+                    ( node (unqual "text") (CData CDataText (t.titleSection.body) Nothing)
+                    ),
+                  node
+                    (unqual "questiontext")
+                    ( Attr (unqual "format") "html",
+                      node (unqual "text") (CData CDataText questionText Nothing)
+                    ),
+                  node (unqual "defaultgrade") (CData CDataText "1" Nothing),
+                  node (unqual "penalty") (CData CDataText "0" Nothing),
+                  node (unqual "hidden") (CData CDataText "0" Nothing),
+                  node (unqual "idnumber") (CData CDataText "" Nothing),
+                  node (unqual "usecase") (CData CDataText "0" Nothing),
+                  node
+                    (unqual "answer")
+                    ( [ Attr (unqual "fraction") "100",
+                        Attr (unqual "format") "moodle_auto_format"
+                      ],
+                      [ node (unqual "text") (CData CDataText sol Nothing),
+                        node (unqual "feedback") (Attr (unqual "format") "html", node (unqual "text") (CData CDataText "" Nothing))
+                      ]
+                    )
+                ]
+                  ++ case t.traceType of
+                    Output -> []
+                    Compile ->
+                      [ node
+                          (unqual "answer")
+                          ( [ Attr (unqual "fraction") "0",
+                              Attr (unqual "format") "moodle_auto_format"
+                            ],
+                            [ node (unqual "text") (CData CDataText (stringNot sol) Nothing),
+                              node (unqual "feedback") (Attr (unqual "format") "html", node (unqual "text") (CData CDataText "" Nothing))
+                            ]
+                          )
+                      ]
+              )
+          )
+
+buildText :: String -> TraceType -> IO String
+buildText code tt = do
+  b64 <- codeImageBase64 code
   return $
-    add_attr
-      (Attr (unqual "type") "coderunner")
-      ( node
-          (unqual "question")
-          [ node
-              (unqual "name")
-              ( node (unqual "text") (CData CDataText (t ^. nameSection . body) Nothing)
-              ),
-            node
-              (unqual "questiontext")
-              ( Attr (unqual "format") "html",
-                node (unqual "text") (CData CDataText task Nothing)
-              ),
-            node (unqual "defaultgrade") (CData CDataText "1" Nothing),
-            node (unqual "penalty") (CData CDataText "0" Nothing),
-            node (unqual "hidden") (CData CDataText "0" Nothing),
-            node (unqual "coderunnertype") (CData CDataText "cpp_function" Nothing),
-            node (unqual "prototypetype") (CData CDataText "0" Nothing),
-            node (unqual "allornothing") (CData CDataText "1" Nothing),
-            node (unqual "penaltyregime") (CData CDataText "10, 20, ..." Nothing),
-            node (unqual "precheck") (CData CDataText "0" Nothing),
-            node (unqual "hidecheck") (CData CDataText "0" Nothing),
-            node (unqual "showsource") (CData CDataText "0" Nothing),
-            node (unqual "answerboxlines") (CData CDataText "18" Nothing),
-            node (unqual "answerboxcolumns") (CData CDataText "100" Nothing),
-            node (unqual "answerpreload") (CData CDataVerbatim preAllocation Nothing),
-            moodleTemplate solution,
-            node (unqual "validateonsave") (CData CDataText "1" Nothing),
-            node (unqual "hoisttemplateparams") (CData CDataText "1" Nothing),
-            node (unqual "templateparamslang") (CData CDataText "twig" Nothing),
-            node (unqual "templateparamsevalpertry") (CData CDataText "0" Nothing),
-            node (unqual "templateparamsevald") (CData CDataText "{}" Nothing),
-            node (unqual "twigall") (CData CDataText "0" Nothing),
-            node (unqual "attachments") (CData CDataText "0" Nothing),
-            node (unqual "attachmentsrequired") (CData CDataText "0" Nothing),
-            node (unqual "maxfilesize") (CData CDataText "10240" Nothing),
-            node (unqual "displayfeedback") (CData CDataText "1" Nothing),
-            node (unqual "testcases") (testNodes tests)
-          ]
-      )
+    "<p>"
+      ++ case tt of
+        Output -> "What is the output of the following program?"
+        Compile -> "Does the following program compile?"
+      ++ "</p><img src=\"data:image/png;base64,"
+      ++ unpack b64
+      ++ "\">"
 
-testNodes :: [(String, String)] -> [Element]
-testNodes = map f
+buildSolution :: String -> TraceType -> IO (Either String String)
+buildSolution code tt = do
+  writeFile filePathCpp code
+  (exit, stdout, stdin) <- readProcessWithExitCode "g++" ["--std=c++20", "-o", filePathEx, filePathCpp] ""
+  case (exit, tt) of
+    (ExitSuccess, Compile) -> return $ Right "true"
+    (ExitFailure _, Compile) -> return $ Right "false"
+    (ExitSuccess, Output) -> runProgram
+    (ExitFailure _, Output) -> return $ Left "The tasks tracing type is set to 'output', but the program does not compile"
   where
-    f :: (String, String) -> Element
-    f (c, o) =
-      node
-        (unqual "testcase")
-        [ node
-            (unqual "testcode")
-            (node (unqual "text") (CData CDataVerbatim c Nothing)),
-          node
-            (unqual "expected")
-            (node (unqual "text") (CData CDataVerbatim o Nothing))
-        ]
+    runProgram = do
+      (exit, stdout, stdin) <- readProcessWithExitCode filePathEx [] ""
+      case exit of
+        ExitSuccess -> return $ Right stdout
+        ExitFailure _ -> return $ Left "The tasks tracing type is set to 'output', but the program exits with failure"
+    filePathCpp = "/tmp/cpp-tracing-program.cpp"
+    filePathEx = "/tmp/cpp-tracing-program"
 
-moodleTemplate :: String -> Element
-moodleTemplate solution =
-  node (unqual "template") (CData CDataVerbatim t Nothing)
-  where
-    t =
-      unlines
-        [ "#include <iostream>",
-          "#include <fstream>",
-          "#include <string>",
-          "#include <cmath>",
-          "#include <vector>",
-          "#include <algorithm>",
-          "",
-          "using namespace std;",
-          "#define SEPARATOR \"#<ab@17943918#@>#\"",
-          "",
-          "{{ STUDENT_ANSWER }}",
-          "",
-          "namespace Solution {"
-        ]
-        ++ solution
-        ++ unlines
-          [ "}",
-            "",
-            "int main() {",
-            "{% for TEST in TESTCASES %}",
-            "   {",
-            "    {{ TEST.extra }};",
-            "    {{ TEST.testcode }};",
-            "   }",
-            "    {% if not loop.last %}cout << SEPARATOR << endl;{% endif %}",
-            "{% endfor %}",
-            "    return 0;",
-            "}"
-          ]
+determineQuestionType :: TraceType -> String
+determineQuestionType Compile = "truefalse"
+determineQuestionType Output = "shortanswer"
+
+stringNot :: String -> String
+stringNot "true" = "false"
+stringNot "false" = "true"

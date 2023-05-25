@@ -17,8 +17,18 @@ library
       microlens-th,
       xml,
       megaparsec,
-      generator
+      generator,
+      text,
+      process,
+      bytestring,
+      base64,
+      mtl
   default-language: Haskell2010
+  default-extensions:
+       OverloadedRecordDot,
+       DuplicateRecordFields,
+       ImportQualifiedPost,
+       FlexibleContexts
 
 executable moodle-cpp-tracing
   main-is: Main.hs
@@ -30,3 +40,6 @@ executable moodle-cpp-tracing
       moodle-cpp-tracing,
       generator
   default-language: Haskell2010
+  default-extensions:
+       OverloadedRecordDot,
+       DuplicateRecordFields,

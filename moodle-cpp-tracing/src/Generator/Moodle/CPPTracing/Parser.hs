@@ -1,20 +1,21 @@
 module Generator.Moodle.CPPTracing.Parser (Generator.Moodle.CPPTracing.Parser.parse) where
 
+import Generator.Atoms (ParameterName (ParameterName))
 import Generator.Moodle.CPPTracing.AbstractSyntaxTree
 import Generator.ParameterParser as PRP
-import Generator.ParserUtils
 import Generator.ParameterParser.AST (ParameterAST)
+import Generator.ParserUtils
 import Lens.Micro ((^.))
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import Generator.Atoms (ParameterName(ParameterName))
+import Data.Functor (($>))
 
 -- * Interface
 
 parse :: String -> Either String (ParameterAST, Template)
 parse s = do
   tmpl <- parseTemplate s
-  return (tmpl ^. parameterSection . parameterBody, tmpl)
+  return (tmpl.parameterSection, tmpl)
 
 parseTemplate :: String -> Either String Template
 parseTemplate template =
@@ -28,54 +29,54 @@ parseTemplate template =
 parameter :: String
 parameter = "Parameter"
 
-task :: String
-task = "Task"
+code :: String
+code = "Code"
 
-solution :: String
-solution = "Solution"
+title :: String
+title = "Title"
 
-preAllocation :: String
-preAllocation = "PreAllocation"
+ttype :: String
+ttype = "Type"
 
-test :: String
-test = "Tests"
-
-name :: String
-name = "Name"
-
-author :: String
-author = "Author"
+feedback :: String
+feedback = "Feedback"
 
 headlines :: [String]
-headlines = [parameter, task, solution, preAllocation, test, name, author]
+headlines = [parameter, code, title, ttype, feedback]
 
 -- * Main Parser
 
 coderunnerParser :: Parser Template
 coderunnerParser =
   Template
-    placeholder
-    <$> simpleSectionParser name
-    <*> simpleSectionParser author
+    <$> simpleSectionParser title
+    <*> traceTypeParser
     <*> parameterSectionParser
-    <*> sectionParser task
-    <*> sectionParser solution
-    <*> sectionParser preAllocation
-    <*> testSectionParser
+    <*> sectionParser code
+    <*> sectionParser feedback
 
 -- * Parameter Section
 
-parameterSectionParser :: Parser ParameterSection
+parameterSectionParser :: Parser ParameterAST
 parameterSectionParser =
-  ParameterSection
-    placeholder
-    <$> (parameterHeadlineParser *> PRP.parser (headlineOneOfParser headlines))
+  parameterHeadlineParser *> PRP.parser (headlineOneOfParser headlines)
+
+-- * Trace type parser
+traceTypeParser :: Parser TraceType
+traceTypeParser = do
+  _ <- headlineParser ttype
+  x <- comp <|> out
+  _ <- eol
+  return x
+  where
+    comp = (try . hlexeme . string) "compile" $> Compile
+    out = (try . hlexeme . string) "output" $> Output
 
 -- * Other Sections
 
 sectionParser :: String -> Parser Section
 sectionParser h = do
-  Section placeholder
+  Section 
     <$> headlineParser h
     <*> some (sectionBodyComponentParser $ headlineOneOfParser headlines)
 
@@ -121,26 +122,6 @@ outputComponentParser :: Parser SectionBodyComponent
 outputComponentParser =
   OutputComponent <$> outputParser
 
-testSectionParser :: Parser TestSection
-testSectionParser = do
-  _ <- headlineParser test
-  testcases <- some testCaseParser
-  return $ TestSection placeholder testcases
-
-testCaseParser :: Parser TestCase
-testCaseParser = do
-  _ <- codeHeadlineParser
-  c <- some $ sectionBodyComponentParser outcomeHeadlineParser
-  _ <- outcomeHeadlineParser
-  o <- some $ sectionBodyComponentParser $ codeHeadlineParser <|> headlineOneOfParser headlines
-  return $ TestCase placeholder c o
-
-codeHeadlineParser :: Parser String
-codeHeadlineParser = headlineParser "Code"
-
-outcomeHeadlineParser :: Parser String
-outcomeHeadlineParser = headlineParser "Outcome"
-
 -- * Output / Parameter Usage
 
 outputParser :: Parser Output
@@ -157,7 +138,7 @@ parameterUsageParser :: Parser Output
 parameterUsageParser = do
   i <- ParameterName <$> identifierParser
   cp <- (optional . try) callPartParser
-  return $ Parameter $ ParameterUsage placeholder i cp
+  return $ Parameter $ ParameterUsage i cp
 
 callPartParser :: Parser CallPart
 callPartParser = do
@@ -177,7 +158,7 @@ simpleSectionParser :: String -> Parser SimpleSection
 simpleSectionParser hl = do
   _ <- headlineParser hl
   b <- some simpleSectionComponentParser
-  return $ SimpleSection placeholder hl (concat b)
+  return $ SimpleSection hl (concat b)
 
 simpleSectionComponentParser :: Parser String
 simpleSectionComponentParser = do
