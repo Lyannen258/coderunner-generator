@@ -75,4 +75,8 @@ addConstraints (n1, is1) (n2, is2)
       mapM_
         (uncurry addConstraint)
         (zip [(n1, x) | x <- is1] [(n2, x) | x <- is2])
+  | length is2 == 1 =
+      mapM_ 
+        (uncurry addConstraint)
+        (zip  [(n1, x) | x <- is1] [(n2, x) | x <- repeat . head $ is2])
   | otherwise = throwError "addConstraints: Lists is1 and is2 do not have the same length."

@@ -147,8 +147,9 @@ buildOutput _ code feedback t = do
                   node
                     (unqual "questiontext")
                     ( Attr (unqual "format") "html",
-                      node (unqual "text") (CData CDataText questionText Nothing)
+                      node (unqual "text") (CData CDataVerbatim questionText Nothing)
                     ),
+                  node (unqual "generalfeedback") (Attr (unqual "format") "html", node (unqual "text") (CData CDataVerbatim feedback Nothing)),
                   node (unqual "defaultgrade") (CData CDataText "1" Nothing),
                   node (unqual "penalty") (CData CDataText "0" Nothing),
                   node (unqual "hidden") (CData CDataText "0" Nothing),
@@ -188,7 +189,7 @@ buildText code tt = do
       ++ case tt of
         Output -> "What is the output of the following program?"
         Compile -> "Does the following program compile?"
-      ++ "</p><img src=\"data:image/png;base64,"
+      ++ "</p><img style=\"max-width:700px;\" src=\"data:image/png;base64,"
       ++ unpack b64
       ++ "\">"
 

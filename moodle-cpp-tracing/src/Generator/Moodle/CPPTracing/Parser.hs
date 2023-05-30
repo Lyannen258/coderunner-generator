@@ -156,6 +156,8 @@ argsParser = sepBy argParser comma
 
 simpleSectionParser :: String -> Parser SimpleSection
 simpleSectionParser hl = do
+  _ <- optional blockComment
+  _ <- many eol
   _ <- headlineParser hl
   b <- some simpleSectionComponentParser
   return $ SimpleSection hl (concat b)
