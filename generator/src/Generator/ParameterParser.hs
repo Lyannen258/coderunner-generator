@@ -6,6 +6,8 @@ import Generator.ParserUtils
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Read (readMaybe)
+import Data.List (singleton)
+import Control.Monad (join)
 
 -- * Main parsers
 
@@ -58,14 +60,14 @@ regularValueParser = valueParserDouble <|> valueParserSingle
 valueParserDouble :: Parser IncompleteAtomicValue
 valueParserDouble = do
   _ <- openQuotes
-  valueParts <- some $ valuePartParser closingQuotes
+  valueParts <- many $ valuePartParser closingQuotes
   _ <- closingQuotes
   return $ IncompleteAtomicValue valueParts
 
 valueParserSingle :: Parser IncompleteAtomicValue
 valueParserSingle = do
   _ <- openSingle
-  valueParts <- some $ valuePartParser closingSingle
+  valueParts <- many $ valuePartParser closingSingle
   _ <- closingSingle
   return $ IncompleteAtomicValue valueParts
 
@@ -88,9 +90,12 @@ valuePartParser endParser =
 simpleValuePartParser :: Parser Char -> Parser ValuePart
 simpleValuePartParser endParser = do
   notFollowedBy $ stringEndLookAhead endParser
-  firstChar <- printChar
-  rest <- manyTill printChar (stringEndLookAhead endParser)
-  return $ StringPart (firstChar : rest)
+  firstChar <- ch
+  rest <- manyTill ch (stringEndLookAhead endParser)
+  let rest' = concat rest
+  return $ StringPart (firstChar ++ rest')
+  where
+    ch = fmap singleton printChar <|> eol
 
 stringEndLookAhead :: Parser Char -> Parser ()
 stringEndLookAhead endParser = do
