@@ -14,32 +14,32 @@ where
 import Generator.CmdArgs (Args (amount, debugOutput, interactive, maxConfigurations, templateFile))
 import Generator.Configuration
 
-data Globals r u = Globals
+data Globals r u a = Globals
   { parser :: String -> Either String (r, u),
     generator :: [Configuration] -> u -> IO (Either String String),
-    args :: Args
+    args :: Args a
   }
 
-constructGlobals :: (String -> Either String (r, u)) -> ([Configuration] -> u -> IO (Either String String)) -> Args -> Globals r u
+constructGlobals :: (String -> Either String (r, u)) -> ([Configuration] -> u -> IO (Either String String)) -> Args a -> Globals r u a
 constructGlobals = Globals
 
-getParser :: Globals r u -> (String -> Either String (r, u))
+getParser :: Globals r u a -> (String -> Either String (r, u))
 getParser = parser
 
-getGenerator :: Globals r u -> ([Configuration] -> u -> IO (Either String String))
+getGenerator :: Globals r u a -> ([Configuration] -> u -> IO (Either String String))
 getGenerator = generator
 
-getTemplateFilePath :: Globals r u -> String
+getTemplateFilePath :: Globals r u a -> String
 getTemplateFilePath = templateFile . args
 
-getDebugOutputFlag :: Globals r u -> Bool
+getDebugOutputFlag :: Globals r u a -> Bool
 getDebugOutputFlag = debugOutput . args
 
-getAmount :: Globals r u -> Maybe Int
+getAmount :: Globals r u a -> Maybe Int
 getAmount = amount . args
 
-getMaxConfigurations :: Globals r u -> Bool
+getMaxConfigurations :: Globals r u a -> Bool
 getMaxConfigurations = maxConfigurations . args
 
-getInteractive :: Globals r u -> Bool
+getInteractive :: Globals r u a -> Bool
 getInteractive = interactive . args

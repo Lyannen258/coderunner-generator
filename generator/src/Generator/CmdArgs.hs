@@ -4,30 +4,32 @@ import Options.Applicative
 
 -- * Arguments Type
 
-data Args = Args
+data Args a = Args
   { templateFile :: String,
     amount :: Maybe Int,
     debugOutput :: Bool,
     maxConfigurations :: Bool,
-    interactive :: Bool
+    interactive :: Bool,
+    additional :: a
   }
   deriving (Show)
 
 -- * Parser Info
 
-parserInfo :: ParserInfo Args
-parserInfo = info (parser <**> helper) fullDesc
+parserInfo :: Parser a -> ParserInfo (Args a)
+parserInfo additional = info (parser additional <**> helper) fullDesc
 
 -- * Parsers
 
-parser :: Parser Args
-parser =
+parser :: Parser a -> Parser (Args a)
+parser addParser =
   Args
     <$> templateFileParser
     <*> optional amountParser
     <*> debugParser
     <*> maxParser
     <*> interactiveParser
+    <*> addParser
 
 templateFileParser :: Parser String
 templateFileParser =
@@ -67,5 +69,8 @@ interactiveParser =
 
 -- * Execution function
 
-executeParser :: IO Args
-executeParser = execParser parserInfo
+executeParser :: Parser a -> IO (Args a)
+executeParser additionalParser = execParser $ parserInfo additionalParser
+
+emptyParser :: Parser ()
+emptyParser = pure ()

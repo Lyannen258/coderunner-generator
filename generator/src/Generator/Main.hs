@@ -15,7 +15,7 @@ import System.FilePath (dropExtension, takeBaseName, takeDirectory, (</>))
 import System.IO
 import Text.Pretty.Simple (pPrint)
 
-main :: (Show r, ToParseResult r) => App r u ()
+main :: (Show r, ToParseResult r) => App r u a ()
 main = do
   fileContent <- readTemplateFile
   createOutputDirectory
@@ -31,19 +31,19 @@ main = do
     then mainMaxAmount parseResult
     else mainConfigurations parseResult u
 
-mainMaxAmount :: ParseResult -> App r u ()
+mainMaxAmount :: ParseResult -> App r u a ()
 mainMaxAmount pr = do
   maxAmount <- computeMaxAmount pr
   printMaxAmount maxAmount
   return ()
 
-printMaxAmount :: Int -> App r u ()
+printMaxAmount :: Int -> App r u a ()
 printMaxAmount m = do
   printLn output
   where
     output = "Maximum amount of configurations: " ++ show m
 
-mainConfigurations :: ParseResult -> u -> App r u ()
+mainConfigurations :: ParseResult -> u -> App r u a ()
 mainConfigurations parseResult u = do
   configs <- computeConfigurations parseResult
 
@@ -55,7 +55,7 @@ mainConfigurations parseResult u = do
   printLn $ "Generated " ++ (show . length) configs ++ " variants"
 
 -- | Read content of the template file
-readTemplateFile :: App r u String
+readTemplateFile :: App r u a String
 readTemplateFile = do
   filePath <- asks getTemplateFilePath
   inputHandle <- liftIO $ openFile filePath ReadMode
@@ -63,18 +63,18 @@ readTemplateFile = do
   liftIO $ hGetContents inputHandle
 
 -- | Write single result
-writeResult :: String -> App r u ()
+writeResult :: String -> App r u a ()
 writeResult = writeToFile "result.xml"
 
 -- | Create directory for the output files
-createOutputDirectory :: App r u ()
+createOutputDirectory :: App r u a ()
 createOutputDirectory = do
   maxFlagActive <- asks getMaxConfigurations
   filePath <- asks getTemplateFilePath
   unless maxFlagActive $ liftIO $ createDirectoryIfMissing True $ dropExtension filePath
 
 -- | Write content to a file in the output directory
-writeToFile :: String -> String -> App r u ()
+writeToFile :: String -> String -> App r u a ()
 writeToFile fileName output = do
   inputFilePath <- asks getTemplateFilePath
   let path = takeDirectory inputFilePath </> takeBaseName inputFilePath </> fileName
@@ -83,7 +83,7 @@ writeToFile fileName output = do
   liftIO $ hPutStr outputHandle output
   liftIO $ hClose outputHandle
 
-debugOutput :: Show a => a -> App r u ()
+debugOutput :: Show x => x -> App r u a ()
 debugOutput a = do
   dbg <- asks getDebugOutputFlag
   liftIO $ when dbg (pPrint a)

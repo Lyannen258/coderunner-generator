@@ -9,6 +9,8 @@ import Generator.Configuration (Configuration)
 import Generator.Globals (constructGlobals)
 import Generator.Main (main)
 import Generator.ToParseResult
+import Generator.CmdArgs (emptyParser)
+import Options.Applicative (Parser)
 
 -- | r is the return that the run function works with,
 -- u is the user state that is fed to the generator function
@@ -21,11 +23,14 @@ type GeneratorFunction u =
   [Configuration] -> u -> IO (Either String String)
 
 -- | The run function
-run :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s -> IO ()
-run parser generator = do
-  args <- CmdArgs.executeParser
+runCustomCmdArgs :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s -> Parser a -> IO ()
+runCustomCmdArgs parser generator argParser = do
+  args <- CmdArgs.executeParser argParser
   let g = constructGlobals parser generator args
   res <- runExceptT (runReaderT (unApp main) g)
   case res of
     Left s -> putStrLn $ "Error: " ++ s
     Right _ -> return ()
+
+run :: (Show r, ToParseResult r) => ParserFunction r s -> GeneratorFunction s -> IO ()
+run parser generator = runCustomCmdArgs parser generator emptyParser

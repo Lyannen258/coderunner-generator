@@ -6,11 +6,11 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Generator.Globals (Globals)
 
-newtype App r u a = App
+newtype App r u a b = App
   { unApp ::
       ReaderT
-        (Globals r u)
+        (Globals r u a)
         (ExceptT String IO)
-        a
+        b
   }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadReader (Globals r u), MonadError String)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadReader (Globals r u a), MonadError String)

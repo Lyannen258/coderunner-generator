@@ -14,7 +14,7 @@ import Generator.Configuration.Internal
 import Generator.Configuration.Type as Config
 import Text.Read (readMaybe)
 
-chooseConfig :: [Configuration] -> App r u Configuration
+chooseConfig :: [Configuration] -> App r u b Configuration
 chooseConfig cs = do
   cs' <- f (singleParameters . head $ cs) getSingleParameter cs
   cs'' <- f (singleTupleParameters . head $ cs) getSingleTupleParameter cs'
@@ -46,7 +46,7 @@ chooseParameterValue' ::
   (Configuration -> Maybe (Parameter v a)) ->
   [Configuration] ->
   Parameter v a ->
-  App r u [Configuration]
+  App r u b [Configuration]
 chooseParameterValue' f configs p =
   filterConfigs
     <$> chooseParameterValue p.name validVals
@@ -55,7 +55,7 @@ chooseParameterValue' f configs p =
   where
     validVals = allValuesForParameter configs f
 
-chooseParameterValue :: Show (v a) => ParameterName -> RangeType v a -> App r u (v a)
+chooseParameterValue :: Show (v a) => ParameterName -> RangeType v a -> App r u b (v a)
 chooseParameterValue pn r = do
   let vcs = toList . Atoms.range $ r
   let l = zip ([1 ..] :: [Int]) vcs

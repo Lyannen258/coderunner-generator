@@ -26,12 +26,12 @@ import Generator.ParseResult.Type (Constraint, ParseResult)
 import Generator.ParseResult.Type qualified as PR
 import System.Random (RandomGen, getStdGen, uniformR)
 
-computeMaxAmount :: ParseResult -> App r u Int
+computeMaxAmount :: ParseResult -> App r u a Int
 computeMaxAmount pr = case allCombinations pr of
   [] -> return 1
   clr -> (return . length . removeForbidden pr) clr
 
-computeConfigurations :: ParseResult -> App r u [Configuration]
+computeConfigurations :: ParseResult -> App r u a [Configuration]
 computeConfigurations pr = do
   case allCombinations pr of
     [] -> do
@@ -48,7 +48,7 @@ computeConfigurations pr = do
         (forM [1 .. amount] $ \i -> do liftIO $ putStrLn ("\nSpecify variant " ++ show i ++ ":\n"); chooseConfig configs)
         (chooseRandoms amount configs)
 
-chooseRandoms :: Int -> [Configuration] -> App r u [Configuration]
+chooseRandoms :: Int -> [Configuration] -> App r u a [Configuration]
 chooseRandoms amount configs = do
   randoms <- getRandomNumbers amount (length configs)
   return $ map (configs !!) randoms
@@ -86,7 +86,7 @@ removeForbidden pr = filter f
     constraintsL :: [Constraint]
     constraintsL = PR.getConstraints pr
 
-evaluateRequestedAmount :: Int -> App r u Int
+evaluateRequestedAmount :: Int -> App r u a Int
 evaluateRequestedAmount maxAmount = do
   amountMaybe <- asks getAmount
   amount <-
@@ -97,7 +97,7 @@ evaluateRequestedAmount maxAmount = do
   printAttemptedAmount amount maxAmount
   return (min amount maxAmount)
 
-printAttemptedAmount :: Int -> Int -> App r u ()
+printAttemptedAmount :: Int -> Int -> App r u a ()
 printAttemptedAmount requestedA maxA = do
   printLn $ show requestedA ++ " variants requested"
   when (requestedA > maxA) $
@@ -111,7 +111,7 @@ printAttemptedAmount requestedA maxA = do
       show requestedA
         ++ " variants not possible. Generating 0 variants."
 
-getRandomNumbers :: Int -> Int -> App r u [Int]
+getRandomNumbers :: Int -> Int -> App r u a [Int]
 getRandomNumbers amountNumbers amountConfigs = do
   stdGen <- getStdGen
   let nDistinct = getNDistinct amountNumbers amountConfigs stdGen
