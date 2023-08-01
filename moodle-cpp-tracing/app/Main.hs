@@ -5,4 +5,4 @@ import Generator.Moodle.CPPTracing.Generator
 import Generator.Moodle.CPPTracing.Parser
 
 main :: IO ()
-main = run parse generate
+main = run (PF parse) (GF generate)

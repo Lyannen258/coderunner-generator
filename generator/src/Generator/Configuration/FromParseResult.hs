@@ -3,7 +3,7 @@
 
 {-# HLINT ignore "Use first" #-}
 
-module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount) where
+module Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount, Amount (..), evaluateRequestedAmount) where
 
 import Control.Monad.Except
 import Control.Monad.Extra (ifM)
@@ -31,8 +31,10 @@ computeMaxAmount pr = case allCombinations pr of
   [] -> return 1
   clr -> (return . length . removeForbidden pr) clr
 
-computeConfigurations :: ParseResult -> App r u a [Configuration]
-computeConfigurations pr = do
+data Amount = Max | Requested
+
+computeConfigurations :: Amount -> ParseResult -> App r u a [Configuration]
+computeConfigurations a pr = do
   case allCombinations pr of
     [] -> do
       amount <- evaluateRequestedAmount 1
@@ -41,7 +43,9 @@ computeConfigurations pr = do
         else return []
     combs -> do
       let withoutForbidden = removeForbidden pr combs
-      amount <- evaluateRequestedAmount (length withoutForbidden)
+      amount <- case a of
+        Requested -> evaluateRequestedAmount (length withoutForbidden)
+        Max -> return (length withoutForbidden)
       configs <- mapM (generateConfiguration pr) withoutForbidden
       ifM
         (asks getInteractive)

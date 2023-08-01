@@ -1,5 +1,7 @@
 module Generator.Globals
   ( Globals,
+    ParserFunction (..),
+    GeneratorFunction (..),
     constructGlobals,
     getParser,
     getGenerator,
@@ -8,25 +10,37 @@ module Generator.Globals
     getAmount,
     getMaxConfigurations,
     getInteractive,
+    getAdditional
   )
 where
 
-import Generator.CmdArgs (Args (amount, debugOutput, interactive, maxConfigurations, templateFile))
+import Generator.CmdArgs (Args (amount, debugOutput, interactive, maxConfigurations, templateFile), additional)
 import Generator.Configuration
 
 data Globals r u a = Globals
-  { parser :: String -> Either String (r, u),
-    generator :: [Configuration] -> u -> IO (Either String String),
+  { parser :: ParserFunction r u,
+    generator :: GeneratorFunction u a,
     args :: Args a
   }
 
-constructGlobals :: (String -> Either String (r, u)) -> ([Configuration] -> u -> IO (Either String String)) -> Args a -> Globals r u a
+-- | r is the return that the run function works with,
+-- u is the user state that is fed to the generator function
+-- without alteration (usually you want to save your ast in u)
+newtype ParserFunction r u
+  = PF (String -> Either String (r, u))
+
+-- | u is the user state that was returned from the parser function
+data GeneratorFunction u a
+  = GF ([Configuration] -> u -> IO (Either String String))
+  | GFCstm ([Configuration] -> Int -> u -> a -> IO (Either String String))
+
+constructGlobals :: ParserFunction r u -> GeneratorFunction u a -> Args a -> Globals r u a
 constructGlobals = Globals
 
-getParser :: Globals r u a -> (String -> Either String (r, u))
+getParser :: Globals r u a -> ParserFunction r u
 getParser = parser
 
-getGenerator :: Globals r u a -> ([Configuration] -> u -> IO (Either String String))
+getGenerator :: Globals r u a -> GeneratorFunction u a
 getGenerator = generator
 
 getTemplateFilePath :: Globals r u a -> String
@@ -43,3 +57,6 @@ getMaxConfigurations = maxConfigurations . args
 
 getInteractive :: Globals r u a -> Bool
 getInteractive = interactive . args
+
+getAdditional :: Globals r u a -> a
+getAdditional = additional . args

@@ -5,7 +5,7 @@ import Control.Monad.Except (liftEither)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Generator.App (App)
-import Generator.Configuration.FromParseResult (computeConfigurations, computeMaxAmount)
+import Generator.Configuration.FromParseResult (Amount (Max, Requested), computeConfigurations, computeMaxAmount, evaluateRequestedAmount)
 import Generator.Globals
 import Generator.Helper (printLn)
 import Generator.ParseResult (ParseResult)
@@ -20,7 +20,7 @@ main = do
   fileContent <- readTemplateFile
   createOutputDirectory
 
-  parser <- asks getParser
+  PF parser <- asks getParser
   (ret, u) <- liftEither $ parser fileContent
   debugOutput ret
   parseResult <- liftEither $ toParseResult ret
@@ -45,14 +45,22 @@ printMaxAmount m = do
 
 mainConfigurations :: ParseResult -> u -> App r u a ()
 mainConfigurations parseResult u = do
-  configs <- computeConfigurations parseResult
-
   generator <- asks getGenerator
-  results <- liftIO $ generator configs u
+  results <- runGenerator generator parseResult u
   results' <- liftEither results
   writeResult results'
 
+runGenerator :: GeneratorFunction u a -> ParseResult -> u -> App r u a (Either String String)
+runGenerator (GF f) parseResult u = do
+  configs <- computeConfigurations Requested parseResult
+  results <- liftIO $ f configs u
   printLn $ "Generated " ++ (show . length) configs ++ " variants"
+  return results
+runGenerator (GFCstm f) parseResult u = do
+  configs <- computeConfigurations Max parseResult
+  amount <- evaluateRequestedAmount $ length configs
+  args <- asks getAdditional
+  liftIO $ f configs amount u args
 
 -- | Read content of the template file
 readTemplateFile :: App r u a String

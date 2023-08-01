@@ -5,4 +5,4 @@ import Generator.Moodle.CPPProgram.Generator
 import Generator.Moodle.CPPProgram.Parser
 
 main :: IO ()
-main = run parse generate
+main = run (PF parse) (GF generate)
