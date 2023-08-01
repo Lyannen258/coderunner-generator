@@ -22,7 +22,14 @@ library
       process,
       bytestring,
       base64,
-      mtl
+      mtl,
+      async,
+      random,
+      directory,
+      html-entities,
+      JuicyPixels,
+      unix,
+      optparse-applicative
   default-language: Haskell2010
   default-extensions:
        OverloadedRecordDot,

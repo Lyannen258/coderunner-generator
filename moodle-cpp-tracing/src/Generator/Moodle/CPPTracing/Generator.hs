@@ -1,5 +1,7 @@
 module Generator.Moodle.CPPTracing.Generator where
 
+import Codec.Picture
+import Control.Concurrent.Async
 import Control.Monad (foldM, join)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -12,9 +14,25 @@ import Generator.Atoms (ParameterName (..))
 import Generator.Configuration
 import Generator.Helper
 import Generator.Moodle.CPPTracing.AbstractSyntaxTree
+import HTMLEntities.Text as Encoder
 import Lens.Micro ((^.))
+import System.Directory
 import System.Process
+import System.Random
 import Text.XML.Light
+import System.Posix.User
+
+getTmpPath :: IO String
+getTmpPath = do
+  i <- fmap toInteger getRealUserID
+  e <- doesDirectoryExist $ tmpfspath i
+  if e
+    then do
+      return $ tmpfspath i ++ "/moodle-cpp-tracing"
+    else do 
+      return "/tmp/moodle-cpp-tracing"
+  where
+    tmpfspath i = "/run/user/" ++ show i
 
 valueNotFoundErr :: ParameterName -> String
 valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
@@ -24,7 +42,8 @@ shouldNotHappenErr = "This error should not happen. Please ask the software prov
 
 generate :: [Configuration] -> Template -> IO (Either String String)
 generate configs tem = do
-  elements <- mapM f configs
+  tempDirectoryHandling
+  elements <- mapConcurrently f configs
   case sequence elements of
     Right es ->
       let doc = node (unqual "quiz") es
@@ -45,16 +64,32 @@ generateConfiguration conf tmpl =
       fs <- generateFeedbackSection conf tmpl
       return (cs, fs)
 
+tempDirectoryHandling :: IO ()
+tempDirectoryHandling = do
+  tmpPath <- getTmpPath
+  createDirectoryIfMissing True tmpPath
+  files <- listDirectory tmpPath
+  mapM_ (\f -> removeFile $ tmpPath ++ "/" ++ f) files
+
 generateCodeSection :: Configuration -> Template -> Either String String
 generateCodeSection conf tmpl =
   generateSection conf (tmpl.codeSection.body)
 
-codeImageBase64 :: String -> IO Text
+codeImageBase64 :: String -> IO (Text, Int)
 codeImageBase64 code = do
-  liftIO $ writeFile "/tmp/moodle-cpp-tracing-code.cpp" code
-  liftIO $ callCommand "silicon --no-window-controls --no-round-corner --background \"#ffffff\" --theme \"1337\" --pad-horiz 0 --pad-vert 0 --output /tmp/img.png /tmp/moodle-cpp-tracing-code.cpp"
-  x <- liftIO $ BS.readFile "/tmp/img.png"
-  return $ encodeBase64 x
+  tmpPath <- getTmpPath
+  r <- randomIO :: IO Integer
+  liftIO $ writeFile (filePathCode tmpPath r) code
+  liftIO $ callCommand $ "silicon --no-window-controls --no-round-corner --background \"#ffffff\" --theme \"1337\" --pad-horiz 0 --pad-vert 0 --output " ++ filePathImg tmpPath r ++ " " ++ filePathCode tmpPath r
+  eitherImg <- readImage (filePathImg tmpPath r)
+  width <- case eitherImg of
+    Right img -> return $ dynamicMap imageWidth img
+    Left str -> ioError . userError $ "The call to silicon did not produce a valid png image."
+  x <- liftIO $ BS.readFile $ filePathImg tmpPath r
+  return (encodeBase64 x, width)
+  where
+    filePathCode path rand = path ++ "/moodle-cpp-tracing-code" ++ show rand ++ ".cpp"
+    filePathImg path rand = path ++ "/img" ++ show rand ++ ".png"
 
 generateFeedbackSection :: Configuration -> Template -> Either String String
 generateFeedbackSection conf tmpl =
@@ -123,6 +158,13 @@ generateSection conf = foldM f ""
             Nothing -> Left $ valueNotFoundErr name
         return $ acc ++ value
 
+enhanceWithCode :: String -> String -> String
+enhanceWithCode feedback code =
+  feedback
+    ++ "<br><br><p>Code for copying:</p><code><pre>"
+    ++ (unpack . Encoder.text $ pack code)
+    ++ "</pre></code>"
+
 buildOutput ::
   Configuration ->
   String ->
@@ -149,7 +191,7 @@ buildOutput _ code feedback t = do
                     ( Attr (unqual "format") "html",
                       node (unqual "text") (CData CDataVerbatim questionText Nothing)
                     ),
-                  node (unqual "generalfeedback") (Attr (unqual "format") "html", node (unqual "text") (CData CDataVerbatim feedback Nothing)),
+                  node (unqual "generalfeedback") (Attr (unqual "format") "html", node (unqual "text") (CData CDataVerbatim (enhanceWithCode feedback code) Nothing)),
                   node (unqual "defaultgrade") (CData CDataText "1" Nothing),
                   node (unqual "penalty") (CData CDataText "0" Nothing),
                   node (unqual "hidden") (CData CDataText "0" Nothing),
@@ -183,33 +225,57 @@ buildOutput _ code feedback t = do
 
 buildText :: String -> TraceType -> IO String
 buildText code tt = do
-  b64 <- codeImageBase64 code
+  (b64, width) <- codeImageBase64 code
   return $
     "<p>"
       ++ case tt of
         Output -> "What is the output of the following program?"
         Compile -> "Does the following program compile?"
-      ++ "</p><img style=\"max-width:700px;\" src=\"data:image/png;base64,"
+      ++ "</p><img style=\"max-width:"
+      ++ show (fromIntegral width * 0.65)
+      ++ "px;\" src=\"data:image/png;base64,"
       ++ unpack b64
       ++ "\">"
 
 buildSolution :: String -> TraceType -> IO (Either String String)
 buildSolution code tt = do
-  writeFile filePathCpp code
-  (exit, stdout, stdin) <- readProcessWithExitCode "g++" ["--std=c++20", "-o", filePathEx, filePathCpp] ""
+  tmpPath <- getTmpPath
+  r <- randomIO :: IO Integer
+  writeFile (filePathCpp tmpPath r) code
+  (exit, stdout, stderr) <- readProcessWithExitCode "g++" ["--std=c++20", "-o", filePathEx tmpPath r, filePathCpp tmpPath r] ""
   case (exit, tt) of
     (ExitSuccess, Compile) -> return $ Right "true"
     (ExitFailure _, Compile) -> return $ Right "false"
-    (ExitSuccess, Output) -> runProgram
-    (ExitFailure _, Output) -> return $ Left "The tasks tracing type is set to 'output', but the program does not compile"
+    (ExitSuccess, Output) -> runProgram tmpPath r
+    (ExitFailure _, Output) -> return $ compileErr code stderr
   where
-    runProgram = do
-      (exit, stdout, stdin) <- readProcessWithExitCode filePathEx [] ""
+    runProgram path r = do
+      (exit, stdout, stderr) <- readProcessWithExitCode (filePathEx path r) [] ""
       case exit of
         ExitSuccess -> return $ Right stdout
-        ExitFailure _ -> return $ Left "The tasks tracing type is set to 'output', but the program exits with failure"
-    filePathCpp = "/tmp/cpp-tracing-program.cpp"
-    filePathEx = "/tmp/cpp-tracing-program"
+        ExitFailure _ -> return $ runtimeErr code stderr 
+    filePathCpp :: String -> Integer -> String
+    filePathCpp path rand = filePathEx path rand ++ ".cpp"
+    filePathEx :: String -> Integer -> String
+    filePathEx path rand = path ++ "/cpp-tracing-program" ++ show rand
+
+compileErr :: String -> String -> Either String b
+compileErr code compError =
+  Left $
+    "The tasks tracing type is set to 'output', but the program does not compile"
+      ++ "\nCode:\n"
+      ++ code
+      ++ "\n\nCompiler Output:\n"
+      ++ compError
+
+runtimeErr :: String -> String -> Either String b
+runtimeErr code err = 
+    Left $
+      "The tasks tracing type is set to 'output', but the program exits with failure"
+        ++ "\nCode:\n"
+        ++ code
+        ++ "\n\nError Output:\n"
+        ++ err
 
 determineQuestionType :: TraceType -> String
 determineQuestionType Compile = "truefalse"
