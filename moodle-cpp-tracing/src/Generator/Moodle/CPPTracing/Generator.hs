@@ -3,11 +3,12 @@ module Generator.Moodle.CPPTracing.Generator where
 import Codec.Picture
 import Control.Concurrent.Async
 import Control.Monad (foldM, join)
-import Control.Monad.Except (MonadError, liftEither)
+import Control.Monad.Except (MonadError (throwError), liftEither)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString qualified as BS (readFile)
 import Data.ByteString.Base64 (encodeBase64)
-import Data.List (foldl', intercalate, nub)
+import Data.List (find, foldl', intercalate, nub)
+import Data.List.Split (chunksOf)
 import Data.Text (Text, pack, unpack)
 import GHC.IO.Exception
 import Generator.Atoms (ParameterName (..))
@@ -17,10 +18,12 @@ import Generator.Moodle.CPPTracing.AbstractSyntaxTree
 import HTMLEntities.Text as Encoder
 import Lens.Micro ((^.))
 import System.Directory
+import System.Posix.User
 import System.Process
 import System.Random
-import Text.XML.Light
-import System.Posix.User
+import Text.XML.Light hiding (findChild)
+import Text.XML.Light.Cursor
+import Debug.Trace (traceId, traceShowId)
 
 getTmpPath :: IO String
 getTmpPath = do
@@ -29,7 +32,7 @@ getTmpPath = do
   if e
     then do
       return $ tmpfspath i ++ "/moodle-cpp-tracing"
-    else do 
+    else do
       return "/tmp/moodle-cpp-tracing"
   where
     tmpfspath i = "/run/user/" ++ show i
@@ -40,18 +43,86 @@ valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
 
-generate :: [Configuration] -> Template -> IO (Either String String)
-generate configs tem = do
+generate :: [Configuration] -> Int -> Template -> Maybe Int -> IO (Either String String)
+generate configs reqAmount tem reqCorrect = do
   tempDirectoryHandling
-  elements <- mapConcurrently f configs
-  case sequence elements of
+  elements <- generateConcurrently configs tem reqAmount reqCorrect
+  case elements of
     Right es ->
       let doc = node (unqual "quiz") es
        in return . return $ ppTopElement doc
     Left err -> return $ Left err
+
+generateConcurrently ::
+  [Configuration] ->
+  Template ->
+  Int ->
+  Maybe Int ->
+  IO (Either String [Element])
+generateConcurrently configs tem reqAmount reqCorrect = do
+  case withCorrectAmount reqCorrect tem of
+    Just r -> do
+      let configBatches = chunksOf (min r 20) configs
+      res <- foldM (f r) (Right []) configBatches
+      return $ fmap (map fst) res
+    Nothing -> do
+      fmap sequence . mapConcurrently (`generateConfiguration` tem) $ take reqAmount configs
   where
-    f :: Configuration -> IO (Either String Element)
-    f config = generateConfiguration config tem
+    f ::
+      Int ->
+      Either String [(Element, Bool)] ->
+      [Configuration] ->
+      IO (Either String [(Element, Bool)])
+    f r acc@(Right accI) cs
+      | length accI >= reqAmount = return acc
+      | otherwise = do
+          res <- mapConcurrently (`generateConfiguration` tem) cs
+          case sequence res of
+            Right es -> return $ foldr (f' r) acc es
+            Left s -> return . Left $ s
+
+    f' ::
+      Int ->
+      Element ->
+      Either a [(Element, Bool)] ->
+      Either a [(Element, Bool)]
+    f' r e accE =
+      case accE of
+        Right acc ->
+          if length acc < reqAmount
+            && ( (isCorrect e && countCorrect acc < r)
+                   || (not (isCorrect e) && length acc - countCorrect acc < reqAmount - r)
+               )
+            then Right $ (e, isCorrect e) : acc
+            else Right acc
+        Left _ -> accE
+
+withCorrectAmount :: Maybe Int -> Template -> Maybe Int
+withCorrectAmount Nothing _ = Nothing
+withCorrectAmount (Just a) tem =
+  case tem.traceType of
+    Compile -> Just a
+    _ -> Nothing
+
+countCorrect :: [(Element, Bool)] -> Int
+countCorrect els = length $ filter snd els
+
+isCorrect :: Element -> Bool
+isCorrect e = case findChild f (fromElement e) of
+  Just c -> case firstChild c >>= firstChild of
+    Just (Cur (Text (CData _ s _)) _ _ _) -> s == "true"
+    Nothing -> False
+  Nothing -> False
+  where
+    f (Cur (Elem e) _ _ _) =
+      ((qName . elName) e == "answer")
+        && ( case find f' (elAttribs e) of
+               Just _ -> True
+               Nothing -> False
+           )
+
+    f' (Attr (QName "fraction" _ _) "100") = True
+    f' _ = False
 
 generateConfiguration :: Configuration -> Template -> IO (Either String Element)
 generateConfiguration conf tmpl =
@@ -60,7 +131,7 @@ generateConfiguration conf tmpl =
     Left str -> return $ Left str
   where
     sections = do
-      cs <- generateCodeSection conf tmpl
+      cs <- traceShowId $ generateCodeSection conf tmpl
       fs <- generateFeedbackSection conf tmpl
       return (cs, fs)
 
@@ -253,7 +324,7 @@ buildSolution code tt = do
       (exit, stdout, stderr) <- readProcessWithExitCode (filePathEx path r) [] ""
       case exit of
         ExitSuccess -> return $ Right stdout
-        ExitFailure _ -> return $ runtimeErr code stderr 
+        ExitFailure _ -> return $ runtimeErr code stderr
     filePathCpp :: String -> Integer -> String
     filePathCpp path rand = filePathEx path rand ++ ".cpp"
     filePathEx :: String -> Integer -> String
@@ -269,13 +340,13 @@ compileErr code compError =
       ++ compError
 
 runtimeErr :: String -> String -> Either String b
-runtimeErr code err = 
-    Left $
-      "The tasks tracing type is set to 'output', but the program exits with failure"
-        ++ "\nCode:\n"
-        ++ code
-        ++ "\n\nError Output:\n"
-        ++ err
+runtimeErr code err =
+  Left $
+    "The tasks tracing type is set to 'output', but the program exits with failure"
+      ++ "\nCode:\n"
+      ++ code
+      ++ "\n\nError Output:\n"
+      ++ err
 
 determineQuestionType :: TraceType -> String
 determineQuestionType Compile = "truefalse"

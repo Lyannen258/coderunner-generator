@@ -1,8 +1,13 @@
 module Main where
 
 import Generator
+import Generator.Moodle.CPPTracing.ArgParser (correctAmountParser)
 import Generator.Moodle.CPPTracing.Generator
 import Generator.Moodle.CPPTracing.Parser
 
 main :: IO ()
-main = run (PF parse) (GF generate)
+main =
+  runCustomCmdArgs
+    (PF parse)
+    (GFCstm generate)
+    correctAmountParser
