@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Generator.Moodle.CPPTracing.Generator where
 
 import Codec.Picture
@@ -23,7 +25,6 @@ import System.Process
 import System.Random
 import Text.XML.Light hiding (findChild)
 import Text.XML.Light.Cursor
-import Debug.Trace (traceId, traceShowId)
 
 getTmpPath :: IO String
 getTmpPath = do
@@ -43,14 +44,22 @@ valueNotFoundErr p = "No value found for usage of parameter '" ++ name p ++ "'"
 shouldNotHappenErr :: String
 shouldNotHappenErr = "This error should not happen. Please ask the software provider."
 
+deriving instance Eq CData
+
+deriving instance Eq Content
+
+deriving instance Eq Element
+
 generate :: [Configuration] -> Int -> Template -> Maybe Int -> IO (Either String String)
 generate configs reqAmount tem reqCorrect = do
   tempDirectoryHandling
   elements <- generateConcurrently configs tem reqAmount reqCorrect
   case elements of
     Right es ->
-      let doc = node (unqual "quiz") es
-       in return . return $ ppTopElement doc
+      let doc = node (unqual "quiz") (nub es)
+       in do
+            printLn ("Generated " ++ (show . length . nub) es ++ " variants. Duplicates were omitted.")
+            return . return $ ppTopElement doc
     Left err -> return $ Left err
 
 generateConcurrently ::
@@ -131,7 +140,7 @@ generateConfiguration conf tmpl =
     Left str -> return $ Left str
   where
     sections = do
-      cs <- traceShowId $ generateCodeSection conf tmpl
+      cs <- generateCodeSection conf tmpl
       fs <- generateFeedbackSection conf tmpl
       return (cs, fs)
 
