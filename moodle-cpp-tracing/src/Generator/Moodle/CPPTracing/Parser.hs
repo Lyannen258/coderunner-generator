@@ -41,8 +41,11 @@ ttype = "Type"
 feedback :: String
 feedback = "Feedback"
 
+chapter :: String
+chapter = "Chapter"
+
 headlines :: [String]
-headlines = [parameter, code, title, ttype, feedback]
+headlines = [parameter, code, title, ttype, feedback, chapter]
 
 -- * Main Parser
 
@@ -50,6 +53,7 @@ coderunnerParser :: Parser Template
 coderunnerParser =
   Template
     <$> simpleSectionParser title
+    <*> optional (simpleSectionParser chapter)
     <*> traceTypeParser
     <*> parameterSectionParser
     <*> sectionParser code

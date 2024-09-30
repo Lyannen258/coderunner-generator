@@ -264,7 +264,7 @@ buildOutput _ code feedback t = do
               (unqual "question")
               ( [ node
                     (unqual "name")
-                    ( node (unqual "text") (CData CDataText (t.titleSection.body) Nothing)
+                    ( node (unqual "text") (CData CDataText (buildTitle t) Nothing)
                     ),
                   node
                     (unqual "questiontext")
@@ -302,6 +302,11 @@ buildOutput _ code feedback t = do
                       ]
               )
           )
+
+buildTitle :: Template -> String
+buildTitle t = case t.chapterSection of
+  Just simpleSection -> simpleSection.body ++ " - " ++ t.titleSection.body
+  Nothing -> t.titleSection.body
 
 buildText :: String -> TraceType -> IO String
 buildText code tt = do

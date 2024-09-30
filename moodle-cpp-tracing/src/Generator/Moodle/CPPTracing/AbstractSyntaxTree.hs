@@ -22,6 +22,7 @@ import Lens.Micro.TH
 -- | Represents a template file as an abstract syntax tree
 data Template = Template
   { titleSection :: SimpleSection,
+    chapterSection :: Maybe SimpleSection,
     traceType :: TraceType,
     parameterSection :: ParameterAST,
     codeSection :: Section,
